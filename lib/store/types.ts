@@ -1,0 +1,156 @@
+export type SessionKind = "focus" | "shortBreak" | "longBreak";
+
+export type TimerStyle = "classic" | "flow";
+
+/** A completed (or abandoned) stretch of time, as recorded in the log. */
+export interface SessionRecord {
+  id: string;
+  kind: SessionKind;
+  /** epoch ms */
+  startedAt: number;
+  /** epoch ms */
+  endedAt: number;
+  /** Seconds actually spent, which is not `endedAt - startedAt` when paused. */
+  seconds: number;
+  completed: boolean;
+}
+
+export interface Settings {
+  focusMinutes: number;
+  shortBreakMinutes: number;
+  longBreakMinutes: number;
+  /** Focus sessions between long breaks. */
+  cyclesBeforeLongBreak: number;
+  autoStartNext: boolean;
+  timerStyle: TimerStyle;
+  /** Flow mode: how long a single count-up session may run. */
+  maxWorkMinutes: number;
+  /**
+   * Flow mode: break minutes earned per work band, shortest band first.
+   * The bands themselves are derived from `maxWorkMinutes` and this array's
+   * length — see `breakTierBands` in `lib/timer/machine.ts`.
+   */
+  breakTiers: number[];
+  /** Keep a small draggable timer visible while scrolling the app. */
+  miniTimerEnabled: boolean;
+  /** Play a chime when a session ends. */
+  soundEnabled: boolean;
+  /** Also raise a browser notification, but only when the tab is hidden. */
+  notificationsEnabled: boolean;
+  /** What the user calls their lambing companion. */
+  companionName: string;
+  /** What the companion calls the user. */
+  userName: string;
+}
+
+export interface StreakState {
+  current: number;
+  best: number;
+  /** YYYY-MM-DD in local time, or null if never. */
+  lastActiveDay: string | null;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+  createdAt: number;
+}
+
+/** Ordered list of card ids; unknown ids are ignored on read. */
+export type Layout = string[];
+
+export interface PersistedState {
+  schemaVersion: number;
+  settings: Settings;
+  sessions: SessionRecord[];
+  streak: StreakState;
+  tasks: Task[];
+  layout: Layout;
+  /** Break minutes banked in flow mode. */
+  bankedBreakSeconds: number;
+  /** epoch ms of the last time the app was open, for the welcome-back line. */
+  lastSeenAt: number | null;
+}
+
+export const MAX_WORK_BOUNDS = { min: 30, max: 120, step: 5 } as const;
+export const BREAK_TIER_BOUNDS = { min: 1, max: 60, step: 1 } as const;
+
+export const DEFAULT_SETTINGS: Settings = {
+  focusMinutes: 25,
+  shortBreakMinutes: 5,
+  longBreakMinutes: 15,
+  cyclesBeforeLongBreak: 4,
+  autoStartNext: false,
+  timerStyle: "classic",
+  maxWorkMinutes: 60,
+  breakTiers: [5, 10, 15, 20, 25],
+  miniTimerEnabled: false,
+  soundEnabled: true,
+  notificationsEnabled: false,
+  companionName: "Lambing",
+  userName: "",
+};
+
+function clamp(value: number, min: number, max: number, fallback: number) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * Stored settings are merged over the defaults, which means a corrupt or
+ * out-of-date payload could hand the app a `breakTiers` of the wrong length
+ * and break every tier lookup. Everything read from disk goes through here.
+ */
+export function normalizeSettings(settings: Settings): Settings {
+  const expectedTiers = DEFAULT_SETTINGS.breakTiers.length;
+  const tiers =
+    Array.isArray(settings.breakTiers) &&
+    settings.breakTiers.length === expectedTiers
+      ? settings.breakTiers.map((value) =>
+          clamp(value, BREAK_TIER_BOUNDS.min, BREAK_TIER_BOUNDS.max, 5),
+        )
+      : [...DEFAULT_SETTINGS.breakTiers];
+
+  return {
+    ...settings,
+    // "reverse" was this mode's name before it became Flow. Saved payloads
+    // from then still carry it, and this runs on every read, so no migration
+    // step or schema bump is needed.
+    timerStyle:
+      (settings.timerStyle as string) === "reverse"
+        ? "flow"
+        : settings.timerStyle,
+    maxWorkMinutes: clamp(
+      settings.maxWorkMinutes,
+      MAX_WORK_BOUNDS.min,
+      MAX_WORK_BOUNDS.max,
+      DEFAULT_SETTINGS.maxWorkMinutes,
+    ),
+    breakTiers: tiers,
+  };
+}
+
+export const DEFAULT_LAYOUT: Layout = [
+  "timer",
+  "chat",
+  "streak",
+  "tasks",
+  "week",
+  "log",
+];
+
+export const CURRENT_SCHEMA_VERSION = 1;
+
+export function createDefaultState(): PersistedState {
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    settings: { ...DEFAULT_SETTINGS },
+    sessions: [],
+    streak: { current: 0, best: 0, lastActiveDay: null },
+    tasks: [],
+    layout: [...DEFAULT_LAYOUT],
+    bankedBreakSeconds: 0,
+    lastSeenAt: null,
+  };
+}

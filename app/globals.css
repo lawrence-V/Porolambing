@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palette lifted from juice.agency, with one semantic twist:
+     focus states run hot (orange/green), break states run soft
+     (blush/mint). The softness during breaks is the whole point. */
+  --color-ink: #1d1c1b;
+  --color-cream: #fffdeb;
+  --color-green: #5ea85e;
+  --color-green-deep: #3f7c40;
+  --color-orange: #ff8356;
+  --color-blush: #ffbab4;
+  --color-mint: #b6deb9;
+  --color-mint-cool: #b6dedb;
+  --color-yellow: #f7f780;
+  --color-night: #121110;
+
+  --font-display: var(--font-display), system-ui, sans-serif;
+  --font-body: var(--font-body), system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* Heavy + condensed, the Wimp Decaf display voice. */
+.font-display {
+  font-family: var(--font-display);
+  font-variation-settings: "wdth" 79;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 0.86;
+}
+
+/* Slightly less compressed, for mid-size headings where the very
+   narrow setting starts to hurt readability. */
+.font-display-wide {
+  font-family: var(--font-display);
+  font-variation-settings: "wdth" 92;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 0.95;
+}
+
+/* juice.agency pins small uppercase mono labels into page corners. At 11px
+   with wide tracking these were the least readable thing in the app, and the
+   most common — 13px with tighter tracking reads without sprawling. */
+.mono-label {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* The landing page keeps the original hairline treatment: those labels sit in
+   page corners as texture, not as information anyone has to read. */
+.mono-label-xs {
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lenis wants the browser out of the way. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+@keyframes bubble {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* The companion breathing while it waits out a focus session. */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--tilt, 0deg));
+  }
+  50% {
+    transform: translateY(-10px) rotate(var(--tilt, 0deg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+::selection {
+  background: var(--color-yellow);
+  color: var(--color-ink);
+}

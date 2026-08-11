@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- The companion, redrawn standalone for the browser tab. Literal hex
+       fills rather than the var(--color-*) tokens the component uses, since
+       nothing resolves those in a favicon context. -->
+  <rect width="64" height="64" rx="14" fill="#fffdeb"/>
+  <circle cx="32" cy="36" r="21" fill="#ff8356" stroke="#1d1c1b" stroke-width="3.5"/>
+  <path d="M32 15v-5M32 15c-4.6-3.6-10.2-3.6-13 -.9 2.8 3.6 9.2 4.6 13 .9Zm0 0c4.6-3.6 10.2-3.6 13-.9-2.8 3.6-9.2 4.6-13 .9Z"
+        fill="#5ea85e" stroke="#1d1c1b" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="20" cy="41" rx="4.2" ry="2.8" fill="#ffbab4"/>
+  <ellipse cx="44" cy="41" rx="4.2" ry="2.8" fill="#ffbab4"/>
+  <circle cx="25" cy="34" r="3.2" fill="#1d1c1b"/>
+  <circle cx="39" cy="34" r="3.2" fill="#1d1c1b"/>
+  <path d="M27 43c2.5 3 7.5 3 10 0" fill="none" stroke="#1d1c1b" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
