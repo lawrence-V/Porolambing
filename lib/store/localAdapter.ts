@@ -132,6 +132,14 @@ export class LocalStorageAdapter implements Repository {
     this.write({ layout });
   }
 
+  async getHiddenCards(): Promise<string[]> {
+    return this.read().hiddenCards;
+  }
+
+  async saveHiddenCards(hiddenCards: string[]): Promise<void> {
+    this.write({ hiddenCards });
+  }
+
   async getBankedBreakSeconds(): Promise<number> {
     return this.read().bankedBreakSeconds;
   }

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { fontVariables } from "./fonts";
 import "./globals.css";
 
@@ -15,7 +16,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${fontVariables} h-full`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        {/* Anonymous page views only — no session, task or streak data ever
+            leaves the browser. A no-op when not deployed on Vercel. */}
+        <Analytics />
+      </body>
     </html>
   );
 }

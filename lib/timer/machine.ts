@@ -61,11 +61,23 @@ export function progress(state: TimerState, now: number): number {
 }
 
 export function isExpired(state: TimerState, now: number): boolean {
-  return (
-    state.phase === "running" &&
-    state.targetSeconds > 0 &&
-    remainingSeconds(state, now) <= 0
-  );
+  if (state.phase !== "running") return false;
+
+  // A countdown with nothing to count down — a Flow break with an empty bank —
+  // is already over. Without this it sits at 00:00 and can never finish, so
+  // the timer looks like it simply isn't running. `startable` keeps the UI
+  // from getting here; this is the backstop.
+  if (!state.countsUp && state.targetSeconds <= 0) return true;
+
+  return state.targetSeconds > 0 && remainingSeconds(state, now) <= 0;
+}
+
+/**
+ * Whether there is anything for Start to do. A Flow break you haven't earned
+ * yet has no duration, so offering Start would only produce a stuck clock.
+ */
+export function startable(state: TimerState): boolean {
+  return state.countsUp || state.targetSeconds > 0;
 }
 
 export function durationFor(kind: SessionKind, settings: Settings): number {
@@ -115,7 +127,14 @@ export function targetSecondsFor(
 ): number {
   if (settings.timerStyle === "flow") {
     if (kind === "focus") return Math.round(settings.maxWorkMinutes * 60);
-    return Math.max(0, Math.round(bankedBreakSeconds));
+    // The configured break is the floor and the bank raises it. Making the
+    // bank the *only* source meant an empty bank left you unable to take any
+    // break at all — a bad trade in an app about looking after yourself, and
+    // it stranded anyone who reset a session before earning anything.
+    return Math.max(
+      durationFor(kind, settings),
+      Math.round(bankedBreakSeconds),
+    );
   }
   return durationFor(kind, settings);
 }
@@ -139,6 +158,50 @@ export function earnedBreakSeconds(
   const index = bands.findIndex((band) => minutes <= band.to);
   const tier = tiers[index === -1 ? tiers.length - 1 : index] ?? 0;
   return Math.round(tier * 60);
+}
+
+export interface FlowGoal {
+  /** Minutes of work that unlock the next step up in break time. */
+  atMinutes: number;
+  /** Break minutes the session has earned so far. */
+  earnedMinutes: number;
+  /** Break minutes once `atMinutes` is reached. */
+  nextMinutes: number;
+  /** 0..1 toward `atMinutes`, restarting at each band. */
+  progress: number;
+}
+
+/**
+ * What a Flow session is working toward right now. The ring uses this rather
+ * than elapsed-over-max: at a 60-minute cap that advances 1/3600th per second,
+ * which looks frozen and makes a running timer read as broken. Measured
+ * against the next band it visibly fills.
+ */
+export function flowGoal(elapsed: number, settings: Settings): FlowGoal {
+  const tiers = settings.breakTiers;
+  const bands = breakTierBands(settings.maxWorkMinutes, tiers.length);
+  const minutes = Math.floor(elapsed / 60);
+
+  const nextIndex = bands.findIndex((band) => band.from > minutes);
+  const atMinutes =
+    nextIndex === -1 ? settings.maxWorkMinutes : bands[nextIndex].from;
+  const fromMinutes =
+    nextIndex === -1
+      ? bands[bands.length - 1].from
+      : nextIndex === 0
+        ? 0
+        : bands[nextIndex - 1].from;
+
+  const span = Math.max(1, (atMinutes - fromMinutes) * 60);
+  return {
+    atMinutes,
+    earnedMinutes: Math.round(earnedBreakSeconds(elapsed, settings) / 60),
+    nextMinutes:
+      nextIndex === -1
+        ? (tiers[tiers.length - 1] ?? 0)
+        : (tiers[nextIndex] ?? 0),
+    progress: Math.min(1, Math.max(0, (elapsed - fromMinutes * 60) / span)),
+  };
 }
 
 export function createTimerState(

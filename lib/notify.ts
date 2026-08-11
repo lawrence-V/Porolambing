@@ -70,6 +70,49 @@ export function playChime(kind: SessionKind): void {
   }
 }
 
+export type Cue = "start" | "resume" | "pause" | "skip" | "reset";
+
+/**
+ * Short feedback blips for the controls. Deliberately quieter than the
+ * session chime — these confirm a press, they don't announce anything, and
+ * they must not compete with the sound that says a session ended.
+ */
+const CUES: Record<Cue, { notes: number[]; gain: number }> = {
+  start: { notes: [587.33, 880.0], gain: 0.09 },
+  resume: { notes: [587.33, 880.0], gain: 0.09 },
+  pause: { notes: [880.0, 587.33], gain: 0.09 },
+  skip: { notes: [740.0], gain: 0.07 },
+  reset: { notes: [392.0], gain: 0.07 },
+};
+
+export function playCue(cue: Cue): void {
+  primeAudio();
+  if (!context) return;
+
+  try {
+    const { notes, gain: peak } = CUES[cue];
+    const now = context.currentTime;
+    notes.forEach((frequency, index) => {
+      const at = now + index * 0.07;
+      const oscillator = context!.createOscillator();
+      const gain = context!.createGain();
+
+      oscillator.type = "triangle";
+      oscillator.frequency.value = frequency;
+
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(peak, at + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.13);
+
+      oscillator.connect(gain).connect(context!.destination);
+      oscillator.start(at);
+      oscillator.stop(at + 0.15);
+    });
+  } catch {
+    // A missing blip must never interrupt the control it belongs to.
+  }
+}
+
 const NOTIFICATION_COPY: Record<SessionKind, { title: string; body: string }> = {
   focus: { title: "Tapos na ang focus", body: "Break na. Balik ka muna dito." },
   shortBreak: { title: "Tapos na ang break", body: "Handa ka na bang bumalik?" },

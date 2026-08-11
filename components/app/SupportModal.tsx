@@ -57,7 +57,7 @@ export function SupportModal({
       open={open}
       onClose={onClose}
       title="Support Porolambing"
-      subtitle="Porolambing is free, has no ads, and never sends your data anywhere. If it's been useful, this keeps it going."
+      subtitle="Porolambing is free, has no ads, and keeps your sessions on your device. If it's been useful, this keeps it going."
     >
       <div className="mb-5 flex items-center gap-3 rounded-2xl border-2 border-ink bg-blush/30 p-4">
         <CompanionAvatar className="h-11 w-11 shrink-0" mood="excited" />

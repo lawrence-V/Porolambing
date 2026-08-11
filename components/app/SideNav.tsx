@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useAppStore } from "@/lib/store/useAppStore";
+import { CREDIT } from "@/lib/support";
 import { cn } from "@/lib/cn";
 import { CompanionAvatar } from "./CompanionAvatar";
 
@@ -39,35 +41,115 @@ function GearIcon() {
   );
 }
 
+/**
+ * Support is hidden for now. Flip this to bring the nav entries back — the
+ * modal, the GCash panel and the link config are all still wired up.
+ */
+const SHOW_SUPPORT = false;
+
 const navRow =
   "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-base font-semibold transition-colors hover:bg-ink/10";
 
+/** The credit, shown at the foot of the rail and in the landing footer. */
+export function Credit({ className }: { className?: string }) {
+  return (
+    <p className={cn("text-xs leading-relaxed", className)}>
+      {CREDIT.madeWithPrefix}
+      <span className="text-orange" aria-label="love">
+        ♥
+      </span>
+      {CREDIT.madeWithSuffix}
+      <br />
+      {CREDIT.copyright}
+    </p>
+  );
+}
+
 /** Fixed rail, `lg` and up. Below that `TopBar` renders instead. */
 export function SideNav({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
+  const collapsed = useAppStore((state) => state.settings.sidebarCollapsed);
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r-2 border-ink bg-cream p-4 lg:flex">
+    <aside
+      className={cn(
+        "fixed inset-y-0 left-0 z-30 hidden flex-col border-r-2 border-ink bg-white p-4 transition-[width] duration-200 lg:flex",
+        collapsed ? "w-18 items-center" : "w-60",
+      )}
+    >
       <Link
         href="/"
-        className="mb-8 flex items-center gap-2.5 rounded-2xl px-1 py-1 transition-opacity hover:opacity-80"
+        aria-label="Porolambing home"
+        className={cn(
+          "mb-6 flex items-center gap-2.5 rounded-2xl py-1 transition-opacity hover:opacity-80",
+          collapsed ? "justify-center" : "px-1",
+        )}
       >
-        <CompanionAvatar className="h-9 w-9" />
-        <span className="font-display text-2xl">POROLAMBING</span>
+        <CompanionAvatar className="h-9 w-9 shrink-0" />
+        {!collapsed && <span className="font-display text-2xl">POROLAMBING</span>}
       </Link>
 
-      <nav className="flex flex-col gap-1">
-        <button onClick={onOpenSupport} className={navRow}>
-          <HeartIcon />
-          Support
-        </button>
-        <button onClick={onOpenSettings} className={navRow}>
+      <nav className="flex w-full flex-col gap-1">
+        {SHOW_SUPPORT && (
+          <button
+            onClick={onOpenSupport}
+            aria-label="Support Porolambing"
+            title={collapsed ? "Support" : undefined}
+            className={cn(navRow, collapsed && "justify-center px-0")}
+          >
+            <HeartIcon />
+            {!collapsed && "Support"}
+          </button>
+        )}
+        <button
+          onClick={onOpenSettings}
+          aria-label="Settings"
+          title={collapsed ? "Settings" : undefined}
+          className={cn(navRow, collapsed && "justify-center px-0")}
+        >
           <GearIcon />
-          Settings
+          {!collapsed && "Settings"}
         </button>
       </nav>
 
-      <span className="mono-label mt-auto px-3 opacity-70">
-        {hydrated ? "Saved locally" : "Loading…"}
-      </span>
+      <div className="mt-auto flex w-full flex-col gap-3">
+        <button
+          onClick={() =>
+            updateSettings({ sidebarCollapsed: !collapsed })
+          }
+          aria-label={collapsed ? "Expand the sidebar" : "Collapse the sidebar"}
+          title={collapsed ? "Expand" : "Collapse"}
+          className={cn(navRow, "text-ink/70", collapsed && "justify-center px-0")}
+        >
+          <svg
+            viewBox="0 0 20 20"
+            className={cn(
+              "h-5 w-5 shrink-0 transition-transform",
+              collapsed && "rotate-180",
+            )}
+            aria-hidden
+          >
+            <path
+              d="M12 5 7 10l5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {!collapsed && "Collapse"}
+        </button>
+
+        {!collapsed && (
+          <div className="px-3">
+            <span className="mono-label block opacity-70">
+              {hydrated ? "Saved locally" : "Loading…"}
+            </span>
+            <Credit className="mt-3 opacity-70" />
+          </div>
+        )}
+      </div>
     </aside>
   );
 }
@@ -75,7 +157,7 @@ export function SideNav({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
 /** Compact bar below `lg`, where a fixed rail would eat the whole screen. */
 export function TopBar({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
   return (
-    <header className="sticky top-0 z-30 border-b-2 border-ink bg-cream/90 backdrop-blur lg:hidden">
+    <header className="sticky top-0 z-30 border-b-2 border-ink bg-white/90 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           <CompanionAvatar className="h-8 w-8" />
@@ -85,13 +167,15 @@ export function TopBar({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
           <span className="mono-label hidden opacity-70 sm:inline">
             {hydrated ? "Saved locally" : "Loading…"}
           </span>
-          <button
-            onClick={onOpenSupport}
-            aria-label="Support Porolambing"
-            className={cn(navRow, "w-auto px-2.5")}
-          >
-            <HeartIcon />
-          </button>
+          {SHOW_SUPPORT && (
+            <button
+              onClick={onOpenSupport}
+              aria-label="Support Porolambing"
+              className={cn(navRow, "w-auto px-2.5")}
+            >
+              <HeartIcon />
+            </button>
+          )}
           <button
             onClick={onOpenSettings}
             aria-label="Settings"

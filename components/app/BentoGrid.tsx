@@ -19,7 +19,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAppStore } from "@/lib/store/useAppStore";
-import { DragHandleProvider } from "@/components/ui/Card";
+import { CARD_LABELS, visibleCards } from "@/lib/store/types";
+import { CardChromeProvider } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { LambingChatCard } from "./LambingChatCard";
 import { SessionLogCard } from "./SessionLogCard";
@@ -38,34 +40,15 @@ const SPANS: Record<string, string> = {
   log: "md:col-span-2 xl:col-span-4",
 };
 
-type SortableHandleProps = Pick<
-  ReturnType<typeof useSortable>,
-  "attributes" | "listeners"
->;
-
-function DragHandle({ attributes, listeners }: SortableHandleProps) {
-  return (
-    <button
-      {...attributes}
-      {...listeners}
-      aria-label="Drag to reorder card"
-      className="grid h-5 w-5 cursor-grab place-items-center rounded text-ink/25 transition-colors hover:text-ink active:cursor-grabbing"
-    >
-      <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden>
-        <g fill="currentColor">
-          <circle cx="3.5" cy="2.5" r="1.1" />
-          <circle cx="8.5" cy="2.5" r="1.1" />
-          <circle cx="3.5" cy="6" r="1.1" />
-          <circle cx="8.5" cy="6" r="1.1" />
-          <circle cx="3.5" cy="9.5" r="1.1" />
-          <circle cx="8.5" cy="9.5" r="1.1" />
-        </g>
-      </svg>
-    </button>
-  );
-}
-
-function SortableCard({ id, children }: { id: string; children: ReactNode }) {
+function SortableCard({
+  id,
+  onHide,
+  children,
+}: {
+  id: string;
+  onHide: () => void;
+  children: ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
 
@@ -75,11 +58,21 @@ function SortableCard({ id, children }: { id: string; children: ReactNode }) {
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(SPANS[id], isDragging && "z-10 opacity-80")}
     >
-      <DragHandleProvider
-        handle={<DragHandle attributes={attributes} listeners={listeners} />}
+      {/* The listeners land on the grip *and* the label inside `Card`, so the
+          grab target is the width of the label rather than a 20px dot. */}
+      <CardChromeProvider
+        chrome={{
+          dragProps: {
+            ...attributes,
+            ...listeners,
+            "aria-label": `${CARD_LABELS[id] ?? id} card — drag to reorder`,
+          },
+          onHide,
+          hideLabel: `Hide the ${CARD_LABELS[id] ?? id} card`,
+        }}
       >
         {children}
-      </DragHandleProvider>
+      </CardChromeProvider>
     </div>
   );
 }
@@ -92,7 +85,12 @@ export function BentoGrid({
   onOpenFlowSettings: () => void;
 }) {
   const layout = useAppStore((state) => state.layout);
+  const hiddenCards = useAppStore((state) => state.hiddenCards);
   const setLayout = useAppStore((state) => state.setLayout);
+  const hideCard = useAppStore((state) => state.hideCard);
+  const resetLayout = useAppStore((state) => state.resetLayout);
+
+  const visible = visibleCards(layout, hiddenCards);
 
   const sensors = useSensors(
     // A small activation distance keeps the handle clickable without
@@ -123,6 +121,22 @@ export function BentoGrid({
     setLayout(arrayMove(layout, from, to));
   }
 
+  // Hiding every card would otherwise leave a blank page with no way back.
+  if (visible.length === 0) {
+    return (
+      <div className="rounded-3xl border-2 border-dashed border-ink/30 p-12 text-center">
+        <p className="font-display-wide text-2xl">Walang natira.</p>
+        <p className="mx-auto mt-2 max-w-sm text-base opacity-70">
+          Every card is hidden. Bring them back from{" "}
+          <strong>Settings → Cards</strong>, or reset the layout.
+        </p>
+        <Button variant="outline" size="md" className="mt-5" onClick={resetLayout}>
+          Reset layout
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <DndContext
       // Without a fixed id, dnd-kit's generated aria-describedby ids differ
@@ -132,10 +146,10 @@ export function BentoGrid({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={layout} strategy={rectSortingStrategy}>
+      <SortableContext items={visible} strategy={rectSortingStrategy}>
         <div className="grid auto-rows-min grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {layout.map((id) => (
-            <SortableCard key={id} id={id}>
+          {visible.map((id) => (
+            <SortableCard key={id} id={id} onHide={() => hideCard(id)}>
               {cards[id]}
             </SortableCard>
           ))}

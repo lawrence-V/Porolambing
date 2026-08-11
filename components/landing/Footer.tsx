@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CompanionAvatar } from "@/components/app/CompanionAvatar";
+import { Credit } from "@/components/app/SideNav";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 import { LiveClock } from "./LiveClock";
 
@@ -30,9 +31,11 @@ export function Footer() {
           <span className="mono-label mono-label-xs max-w-52 leading-relaxed opacity-60">
             Pomodoro + lambing.
             <br />
-            Saved on your device only.
+            Sessions saved on your device only.
           </span>
         </div>
+
+        <Credit className="border-t border-cream/20 pt-6 opacity-60" />
       </div>
     </footer>
   );

@@ -1,19 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { moodFor, statusFor } from "../lambing/mood.ts";
-import { DEFAULT_SETTINGS, normalizeSettings } from "../store/types.ts";
+import {
+  DEFAULT_LAYOUT,
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  reconcileLayout,
+  visibleCards,
+} from "../store/types.ts";
 import {
   advance,
   breakTierBands,
   createTimerState,
   earnedBreakSeconds,
   elapsedSeconds,
+  flowGoal,
   formatClock,
   isExpired,
   nextKind,
   pause,
   remainingSeconds,
   start,
+  startable,
 } from "./machine.ts";
 
 const settings = { ...DEFAULT_SETTINGS };
@@ -87,6 +95,59 @@ test("flow focus counts up and stops at the max work time", () => {
   assert.equal(onBreak.targetSeconds, 300);
 });
 
+test("a Flow break falls back to its configured length, never zero", () => {
+  const flow = { ...settings, timerStyle: "flow" as const };
+
+  // Resetting a Flow session before earning anything used to strand you here:
+  // a break whose whole duration was the bank, so at zero it was a countdown
+  // with nothing to count down. It accepted Start and then sat at 00:00
+  // forever, because a zero-length target can never expire.
+  const empty = createTimerState("shortBreak", flow, 0);
+  assert.equal(empty.targetSeconds, 5 * 60, "falls back to the configured 5m");
+  assert.equal(startable(empty), true, "and can always be started");
+
+  // The bank raises the break above the floor rather than replacing it.
+  assert.equal(createTimerState("shortBreak", flow, 180).targetSeconds, 300);
+  assert.equal(createTimerState("shortBreak", flow, 900).targetSeconds, 900);
+  assert.equal(createTimerState("longBreak", flow, 300).targetSeconds, 15 * 60);
+
+  // Flow focus is open-ended and always startable.
+  assert.equal(startable(createTimerState("focus", flow, 0)), true);
+});
+
+test("a zero-length countdown resolves instead of hanging", () => {
+  // Not reachable through the UI any more, but the guard stays: a corrupt
+  // stored payload could still produce one, and hanging at 00:00 forever is
+  // the worst possible failure for a timer.
+  const broken = { ...createTimerState("shortBreak", settings, 0), targetSeconds: 0 };
+  assert.equal(startable(broken), false);
+  assert.equal(isExpired(start(broken, T0), T0 + 1000), true);
+});
+
+test("the Flow ring tracks the next break band, not the hour", () => {
+  const flow = { ...settings, timerStyle: "flow" as const };
+
+  // Nothing earned yet: working toward the 5-minute mark, and the ring is
+  // already a fifth of the way there after a minute — against the 60-minute
+  // cap it would have moved 1/60th and looked frozen.
+  const fresh = flowGoal(60, flow);
+  assert.equal(fresh.atMinutes, 5);
+  assert.equal(fresh.earnedMinutes, 0);
+  assert.equal(fresh.nextMinutes, 5);
+  assert.ok(fresh.progress > 0.15 && fresh.progress < 0.25);
+
+  // Past the first band, it aims at the next one and reports what's banked.
+  const later = flowGoal(20 * 60, flow);
+  assert.equal(later.atMinutes, 25);
+  assert.equal(later.earnedMinutes, 10);
+  assert.equal(later.nextMinutes, 15);
+
+  // At the cap there is nothing further to reach.
+  const capped = flowGoal(60 * 60, flow);
+  assert.equal(capped.progress, 1);
+  assert.equal(capped.earnedMinutes, 25);
+});
+
 test("the break ladder splits the max work time into five bands", () => {
   assert.deepEqual(
     breakTierBands(60).map((band) => [band.from, band.to]),
@@ -146,6 +207,43 @@ test("settings saved under the old 'reverse' name come back as Flow", () => {
     normalizeSettings({ ...DEFAULT_SETTINGS, timerStyle: "classic" }).timerStyle,
     "classic",
   );
+});
+
+test("a hidden card survives the layout reconciliation", () => {
+  // `reconcileLayout` appends any default id the stored layout is missing —
+  // that's what lets a newly built card reach existing users. It's also why
+  // hiding must never work by deleting from `layout`: the card would be
+  // resurrected on the very next load. This is the regression that guards it.
+  const stored = [...DEFAULT_LAYOUT];
+  const hidden = ["week"];
+
+  const afterReload = reconcileLayout(stored);
+  assert.ok(afterReload.includes("week"), "layout still owns every card");
+  assert.ok(
+    !visibleCards(afterReload, hidden).includes("week"),
+    "but a hidden card must not come back",
+  );
+});
+
+test("reconcileLayout keeps order, drops unknowns, appends new cards", () => {
+  // A user's saved order, missing a card added since and carrying a stale one.
+  const stored = ["chat", "timer", "retired-card", "streak", "tasks", "log"];
+  assert.deepEqual(reconcileLayout(stored), [
+    "chat",
+    "timer",
+    "streak",
+    "tasks",
+    "log",
+    "week",
+  ]);
+});
+
+test("visibleCards filters without reordering", () => {
+  assert.deepEqual(visibleCards(["a", "b", "c"], []), ["a", "b", "c"]);
+  assert.deepEqual(visibleCards(["a", "b", "c"], ["b"]), ["a", "c"]);
+  assert.deepEqual(visibleCards(["a", "b"], ["a", "b"]), []);
+  // An id that isn't on the grid shouldn't disturb anything.
+  assert.deepEqual(visibleCards(["a", "b"], ["zzz"]), ["a", "b"]);
 });
 
 test("the companion dozes off during long focus and perks up on breaks", () => {

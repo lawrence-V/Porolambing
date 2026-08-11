@@ -31,6 +31,9 @@ export interface Repository {
   getLayout(): Promise<Layout>;
   saveLayout(layout: Layout): Promise<void>;
 
+  getHiddenCards(): Promise<string[]>;
+  saveHiddenCards(hidden: string[]): Promise<void>;
+
   getBankedBreakSeconds(): Promise<number>;
   saveBankedBreakSeconds(seconds: number): Promise<void>;
 

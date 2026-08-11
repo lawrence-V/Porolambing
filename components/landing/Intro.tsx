@@ -13,22 +13,22 @@ const SESSION_KEY = "porolambing:intro-played";
 const NODES = [
   { x: 12, y: 16, kind: "bubble", tint: "var(--color-blush)" },
   { x: 26, y: 9, kind: "heart", tint: "var(--color-orange)" },
-  { x: 44, y: 13, kind: "tomato", tint: "var(--color-orange)" },
+  { x: 44, y: 13, kind: "mango", tint: "var(--color-orange)" },
   { x: 63, y: 8, kind: "bubble", tint: "var(--color-mint)" },
   { x: 80, y: 15, kind: "heart", tint: "var(--color-blush)" },
-  { x: 91, y: 27, kind: "tomato", tint: "var(--color-yellow)" },
+  { x: 91, y: 27, kind: "mango", tint: "var(--color-yellow)" },
   { x: 88, y: 47, kind: "bubble", tint: "var(--color-green)" },
   { x: 93, y: 68, kind: "heart", tint: "var(--color-orange)" },
-  { x: 79, y: 84, kind: "tomato", tint: "var(--color-orange)" },
+  { x: 79, y: 84, kind: "mango", tint: "var(--color-orange)" },
   { x: 60, y: 90, kind: "bubble", tint: "var(--color-blush)" },
   { x: 41, y: 86, kind: "heart", tint: "var(--color-yellow)" },
-  { x: 24, y: 91, kind: "tomato", tint: "var(--color-mint)" },
+  { x: 24, y: 91, kind: "mango", tint: "var(--color-mint)" },
   { x: 9, y: 76, kind: "bubble", tint: "var(--color-orange)" },
   { x: 6, y: 52, kind: "heart", tint: "var(--color-green)" },
-  { x: 15, y: 36, kind: "tomato", tint: "var(--color-blush)" },
+  { x: 15, y: 36, kind: "mango", tint: "var(--color-blush)" },
   { x: 70, y: 33, kind: "bubble", tint: "var(--color-yellow)" },
   { x: 31, y: 68, kind: "heart", tint: "var(--color-mint)" },
-  { x: 72, y: 62, kind: "tomato", tint: "var(--color-blush)" },
+  { x: 72, y: 62, kind: "mango", tint: "var(--color-blush)" },
 ] as const;
 
 /** Which nodes are wired to which, as index pairs. */
@@ -52,11 +52,17 @@ function NodeGlyph({ kind, tint }: { kind: string; tint: string }) {
       </svg>
     );
   }
-  if (kind === "tomato") {
+  if (kind === "mango") {
     return (
       <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden>
-        <circle cx="12" cy="14" r="7.5" fill={tint} stroke="var(--color-cream)" strokeWidth="1.6" />
-        <path d="M12 6.5V4M8 5.5c1.6-1 3-1 4 .5 1-1.5 2.4-1.5 4-.5" fill="none" stroke="var(--color-cream)" strokeWidth="1.6" strokeLinecap="round" />
+        <path
+          d="M16.5 6.5c3 2 4.5 5.5 4 9-.5 4-4 7-8 7s-7-3-7.5-7c-.5-4 2.5-7.5 6.5-9 1.8-.7 3.7-.7 5 0Z"
+          fill={tint}
+          stroke="var(--color-cream)"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path d="M16 6V4" fill="none" stroke="var(--color-cream)" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   }

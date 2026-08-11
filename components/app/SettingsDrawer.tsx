@@ -5,11 +5,13 @@ import { useAppStore } from "@/lib/store/useAppStore";
 import {
   notificationPermission,
   playChime,
+  playCue,
   requestNotificationPermission,
   serverNotificationPermission,
   subscribeToPermission,
 } from "@/lib/notify";
 import { Button } from "@/components/ui/Button";
+import { CARD_LABELS, DEFAULT_LAYOUT } from "@/lib/store/types";
 import { cn } from "@/lib/cn";
 
 interface SettingsDrawerProps {
@@ -108,6 +110,9 @@ export function SettingsDrawer({
   const updateSettings = useAppStore((state) => state.updateSettings);
   const resetLayout = useAppStore((state) => state.resetLayout);
   const clearAll = useAppStore((state) => state.clearAll);
+  const hiddenCards = useAppStore((state) => state.hiddenCards);
+  const hideCard = useAppStore((state) => state.hideCard);
+  const showCard = useAppStore((state) => state.showCard);
   const permission = useSyncExternalStore(
     subscribeToPermission,
     notificationPermission,
@@ -260,6 +265,15 @@ export function SettingsDrawer({
               }}
             />
             <Toggle
+              label="Control sounds"
+              hint="Short cues on start, pause, skip and reset."
+              checked={settings.uiSoundsEnabled}
+              onChange={(uiSoundsEnabled) => {
+                updateSettings({ uiSoundsEnabled });
+                if (uiSoundsEnabled) playCue("start");
+              }}
+            />
+            <Toggle
               label="Browser notification"
               hint={
                 permission === "denied"
@@ -272,6 +286,22 @@ export function SettingsDrawer({
               disabled={permission === "denied" || permission === "unsupported"}
               onChange={(enabled) => void toggleNotifications(enabled)}
             />
+          </div>
+
+          <div className="py-3">
+            <p className="mono-label mb-2 opacity-70">Cards</p>
+            <p className="mb-1 text-sm opacity-70">
+              Which cards show on the grid. You can also hide one with the ×
+              on the card itself.
+            </p>
+            {DEFAULT_LAYOUT.map((id) => (
+              <Toggle
+                key={id}
+                label={CARD_LABELS[id] ?? id}
+                checked={!hiddenCards.includes(id)}
+                onChange={(show) => (show ? showCard(id) : hideCard(id))}
+              />
+            ))}
           </div>
 
           <div className="py-3">

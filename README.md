@@ -12,7 +12,12 @@ npm run build
 ```
 
 Two routes: `/` is the marketing page, `/app` is the product. No backend, no
-accounts, no API keys — everything lives in the browser.
+accounts, no API keys — your sessions, tasks and streaks live in the browser.
+
+The deployed site does load **Vercel Analytics** (`<Analytics />` in
+`app/layout.tsx`), which counts anonymous page views. That's the only thing
+that leaves the device, and the on-site copy says so rather than claiming
+otherwise. Remove that one line to make it literally nothing.
 
 ---
 
@@ -173,20 +178,69 @@ the bank down. `breakTierBands` and `earnedBreakSeconds` in
 [`lib/timer/machine.ts`](lib/timer/machine.ts) own this, and `npm test` covers
 the ladder, the floor and the clamp.
 
+Two things Flow needs that Classic doesn't, both covered by tests:
+
+- **The configured break is a floor; the bank raises it.** With 15 minutes
+  banked a short break runs 15 minutes, with nothing banked it still runs the
+  configured 5. Making the bank the *only* source meant an empty bank left you
+  unable to take any break at all — a bad trade in an app about looking after
+  yourself, and it stranded anyone who reset a session before earning
+  anything. `startable()` and `isExpired()` still guard against a zero-length
+  countdown, which can never finish and would hang at `00:00`, but nothing in
+  the UI can reach that now.
+- **The ring tracks the next break band, not the hour.** Against a 60-minute
+  cap it advanced 1/3600th per second and looked frozen, which reads as a
+  broken timer. `flowGoal()` measures against the next band instead, so it
+  fills in minutes.
+
 Flow was called "Reverse" until it was renamed. Settings saved under the old
 name are migrated on read by `normalizeSettings` in
 [`lib/store/types.ts`](lib/store/types.ts) — there is no schema bump, and
 `npm test` covers the migration.
 
+### Cards
+
+Cards can be reordered by dragging their **grip or label**, and hidden with the
+× on the card or the toggles under **Settings → Cards**.
+
+Hidden cards live in `hiddenCards`, *not* by removing them from `layout`.
+`reconcileLayout` appends any default card a saved layout is missing — that's
+what lets a newly built card reach existing users, and it would resurrect a
+hidden card on the next load. `npm test` covers that specific regression.
+
 ### Toggles worth knowing
 
 - **Mini timer** — a draggable pill that keeps the clock visible while you
   scroll. Deliberately *not* the Document Picture-in-Picture API, which only
-  exists in Chrome and Edge.
+  exists in Chrome and Edge. Drag it by the body; the controls stop it.
+- **Sidebar collapse** — narrows the rail to icons; persists like the layout.
+- **Control sounds** — separate from the end-of-session chime, because
+  wanting the alarm without click feedback is a different preference.
+
+Anything draggable carries `touch-action: none`. Without it the browser takes
+the gesture for scrolling and the drag never starts on a touch device.
+
+**Focus / Short / Long are locked while a session runs.** `switchKind` builds a
+fresh timer state, so a stray tab click used to throw the elapsed time away and
+drop the clock back to idle — which read as the timer simply not working. Skip
+or Reset first. The Classic/Flow control is locked for the same reason.
+
+### The companion
+
+A mango, not a tomato — a tilted golden oval with the leaf on the narrow end.
+The tilt matters: drawn as a circle it reads as an orange. `CompanionAvatar`
+carries the detailed version (cheeks, moods) and `app/icon.svg` a heavier one
+drawn specifically for 16px; the two intentionally diverge. Both use the
+`--color-mango` tokens in `app/globals.css`.
 - **Classic/Flow** — a segmented control on the timer card, disabled while a session is running
   because switching would change what the running clock means.
 
 ## Support links
+
+**Currently hidden.** `SHOW_SUPPORT` in
+[`components/app/SideNav.tsx`](components/app/SideNav.tsx) is `false`, so the
+nav entries don't render. The modal, the GCash panel and the links below are
+all still wired up — flip that one constant to bring it back.
 
 [`lib/support.ts`](lib/support.ts) holds the two things to edit:
 

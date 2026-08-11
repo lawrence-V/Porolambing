@@ -1,14 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- The companion, redrawn standalone for the browser tab. Literal hex
-       fills rather than the var(--color-*) tokens the component uses, since
-       nothing resolves those in a favicon context. -->
-  <rect width="64" height="64" rx="14" fill="#fffdeb"/>
-  <circle cx="32" cy="36" r="21" fill="#ff8356" stroke="#1d1c1b" stroke-width="3.5"/>
-  <path d="M32 15v-5M32 15c-4.6-3.6-10.2-3.6-13 -.9 2.8 3.6 9.2 4.6 13 .9Zm0 0c4.6-3.6 10.2-3.6 13-.9-2.8 3.6-9.2 4.6-13 .9Z"
-        fill="#5ea85e" stroke="#1d1c1b" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <ellipse cx="20" cy="41" rx="4.2" ry="2.8" fill="#ffbab4"/>
-  <ellipse cx="44" cy="41" rx="4.2" ry="2.8" fill="#ffbab4"/>
-  <circle cx="25" cy="34" r="3.2" fill="#1d1c1b"/>
-  <circle cx="39" cy="34" r="3.2" fill="#1d1c1b"/>
-  <path d="M27 43c2.5 3 7.5 3 10 0" fill="none" stroke="#1d1c1b" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Drawn for 16px, not scaled down from the in-app avatar: no cheeks, one
+       solid leaf, heavy outlines, and the mark fills the canvas. A tilted oval
+       rather than a circle — a circle at this size just reads as an orange.
+       CompanionAvatar keeps the finer drawing; the two intentionally diverge. -->
+  <ellipse cx="31" cy="38" rx="21" ry="25" transform="rotate(18 31 38)"
+           fill="#f7b32b" stroke="#1d1c1b" stroke-width="5"/>
+  <ellipse cx="39" cy="25" rx="7" ry="10" transform="rotate(18 39 25)"
+           fill="#e8942a" opacity="0.5"/>
+  <path d="M41 12c1-3 1-5 0-7" fill="none" stroke="#1d1c1b" stroke-width="5" stroke-linecap="round"/>
+  <path d="M42 6c4-5 11-5 16-2-3 6-11 8-16 2Z"
+        fill="#5ea85e" stroke="#1d1c1b" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="23" cy="38" r="4.4" fill="#1d1c1b"/>
+  <circle cx="39" cy="38" r="4.4" fill="#1d1c1b"/>
+  <path d="M24 47c4.5 5 11 5 15 0" fill="none" stroke="#1d1c1b"
+        stroke-width="5" stroke-linecap="round"/>
 </svg>

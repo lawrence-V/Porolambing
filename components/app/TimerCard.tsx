@@ -5,9 +5,11 @@ import type { SessionKind } from "@/lib/store/types";
 import {
   earnedBreakSeconds,
   elapsedSeconds,
+  flowGoal,
   formatClock,
   progress,
   remainingSeconds,
+  startable,
 } from "@/lib/timer/machine";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -61,6 +63,14 @@ export function TimerCard({
   const circumference = 2 * Math.PI * radius;
 
   const flow = settings.timerStyle === "flow";
+  /** Session controls that would discard progress are locked once running. */
+  const idle = timer.phase === "idle";
+
+  const goal = countsUp ? flowGoal(elapsedSeconds(timer, now), settings) : null;
+  // Guards against a zero-length countdown, which can never finish and so
+  // hangs at 00:00. Unreachable now that Flow breaks fall back to their
+  // configured length, but a corrupt stored payload could still produce one.
+  const canStart = startable(timer);
 
   return (
     <Card
@@ -80,7 +90,7 @@ export function TimerCard({
             aria-label="Timer style"
             className={cn(
               "flex gap-1 rounded-full border-2 border-ink p-0.5",
-              timer.phase !== "idle" && "pointer-events-none opacity-50",
+              !idle && "pointer-events-none opacity-50",
             )}
           >
             {(["classic", "flow"] as const).map((style) => (
@@ -88,7 +98,7 @@ export function TimerCard({
                 key={style}
                 onClick={() => updateSettings({ timerStyle: style })}
                 aria-pressed={settings.timerStyle === style}
-                disabled={timer.phase !== "idle"}
+                disabled={!idle}
                 className={cn(
                   "mono-label rounded-full px-2.5 py-1 transition-colors",
                   settings.timerStyle === style
@@ -135,16 +145,29 @@ export function TimerCard({
       />
 
       <div className="relative flex flex-col items-center">
-        <div className="mb-4 flex gap-1 rounded-full border-2 border-ink p-1">
+        {/* Locked once a session is under way. `switchKind` builds a fresh
+            timer state, so a stray tab click on a running session silently
+            threw the elapsed time away and reset the clock to idle — which
+            read as the timer simply not working. Skip or Reset first. */}
+        <div
+          className={cn(
+            "mb-4 flex gap-1 rounded-full border-2 border-ink p-1 transition-opacity",
+            !idle && "opacity-50",
+          )}
+          title={idle ? undefined : "Skip or reset to change session"}
+        >
           {KIND_TABS.map((tab) => (
             <button
               key={tab.kind}
               onClick={() => switchKind(tab.kind)}
+              disabled={!idle}
+              aria-current={timer.kind === tab.kind}
               className={cn(
                 "rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors",
                 timer.kind === tab.kind
                   ? "bg-ink text-cream"
                   : "text-ink/70 hover:text-ink",
+                !idle && "cursor-not-allowed",
               )}
             >
               {tab.label}
@@ -178,7 +201,7 @@ export function TimerCard({
               strokeWidth="8"
               strokeLinecap="round"
               strokeDasharray={circumference}
-              strokeDashoffset={circumference * (1 - ratio)}
+              strokeDashoffset={circumference * (1 - (goal?.progress ?? ratio))}
               style={{ transition: "stroke-dashoffset 250ms linear" }}
             />
           </svg>
@@ -198,12 +221,33 @@ export function TimerCard({
           </div>
         </div>
 
+        {/* Flow starts at 00:00 and climbs, which on its own looks like
+            nothing is happening. Name what the session is working toward. */}
+        {goal && (
+          <p className="mt-3 text-center text-sm opacity-70">
+            {goal.earnedMinutes > 0
+              ? `${goal.earnedMinutes}m break earned · ${goal.atMinutes}m makes it ${goal.nextMinutes}m`
+              : `Work ${goal.atMinutes}m to earn a ${goal.nextMinutes}m break`}
+          </p>
+        )}
+
+        {/* Unreachable in normal use now that a Flow break falls back to its
+            configured length — kept as a guard so a corrupt stored payload
+            can't produce a dead button with no explanation. */}
+        {!canStart && (
+          <p className="mt-3 max-w-xs text-center text-sm opacity-70">
+            This break has no length set. Check the durations in Settings.
+          </p>
+        )}
+
         {/* One obvious primary. Skip and Reset are deliberately lighter so the
             eye lands on Start rather than scanning three equal buttons. */}
         <div className="mt-5 flex items-center gap-2">
           <Button
             size={compact ? "lg" : "xl"}
             onClick={startOrPause}
+            disabled={!canStart}
+            title={canStart ? undefined : "Earn some break time first"}
             className={compact ? "min-w-32" : "min-w-40"}
           >
             {running ? "Pause" : timer.phase === "paused" ? "Resume" : "Start"}

@@ -104,7 +104,7 @@ const FEATURES: Array<{
   {
     label: "04 — No account",
     title: "Everything stays on your device",
-    body: "No signup, no server, no email. Your sessions live in your browser and nowhere else.",
+    body: "No signup, no email, no ads. Your sessions, tasks and streaks live in your browser and nowhere else — the site only counts anonymous page visits.",
     art: <LocalDoodle />,
   },
 ];

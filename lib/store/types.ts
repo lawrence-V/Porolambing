@@ -33,8 +33,12 @@ export interface Settings {
   breakTiers: number[];
   /** Keep a small draggable timer visible while scrolling the app. */
   miniTimerEnabled: boolean;
+  /** Narrow the side rail to icons only. */
+  sidebarCollapsed: boolean;
   /** Play a chime when a session ends. */
   soundEnabled: boolean;
+  /** Short cues on start, pause, skip and reset. */
+  uiSoundsEnabled: boolean;
   /** Also raise a browser notification, but only when the tab is hidden. */
   notificationsEnabled: boolean;
   /** What the user calls their lambing companion. */
@@ -67,6 +71,8 @@ export interface PersistedState {
   streak: StreakState;
   tasks: Task[];
   layout: Layout;
+  /** Card ids removed from the grid. See `visibleCards`. */
+  hiddenCards: string[];
   /** Break minutes banked in flow mode. */
   bankedBreakSeconds: number;
   /** epoch ms of the last time the app was open, for the welcome-back line. */
@@ -86,7 +92,9 @@ export const DEFAULT_SETTINGS: Settings = {
   maxWorkMinutes: 60,
   breakTiers: [5, 10, 15, 20, 25],
   miniTimerEnabled: false,
+  sidebarCollapsed: false,
   soundEnabled: true,
+  uiSoundsEnabled: true,
   notificationsEnabled: false,
   companionName: "Lambing",
   userName: "",
@@ -140,6 +148,40 @@ export const DEFAULT_LAYOUT: Layout = [
   "log",
 ];
 
+/** Single source for card names — used by the grid and the settings list. */
+export const CARD_LABELS: Record<string, string> = {
+  timer: "Timer",
+  chat: "Lambing",
+  streak: "Streak",
+  tasks: "Tasks",
+  week: "Last 7 days",
+  log: "Today",
+};
+
+/**
+ * Hidden cards are tracked separately rather than by removing them from
+ * `layout`, because `hydrate()` appends any default id the stored layout is
+ * missing — that's what lets a newly built card reach existing users, and it
+ * would resurrect a hidden one on the very next load.
+ */
+export function visibleCards(layout: Layout, hidden: string[]): Layout {
+  return layout.filter((id) => !hidden.includes(id));
+}
+
+/**
+ * Reconcile a stored layout against the cards that exist today: drop ids we no
+ * longer render, keep the user's order, and append anything new at the end.
+ */
+export function reconcileLayout(
+  stored: Layout,
+  defaults: Layout = DEFAULT_LAYOUT,
+): Layout {
+  return [
+    ...stored.filter((id) => defaults.includes(id)),
+    ...defaults.filter((id) => !stored.includes(id)),
+  ];
+}
+
 export const CURRENT_SCHEMA_VERSION = 1;
 
 export function createDefaultState(): PersistedState {
@@ -150,6 +192,7 @@ export function createDefaultState(): PersistedState {
     streak: { current: 0, best: 0, lastActiveDay: null },
     tasks: [],
     layout: [...DEFAULT_LAYOUT],
+    hiddenCards: [],
     bankedBreakSeconds: 0,
     lastSeenAt: null,
   };

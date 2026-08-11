@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { dayKey, daysBetween } from "@/lib/date";
-import { notifySessionEnd, playChime, primeAudio } from "@/lib/notify";
+import { notifySessionEnd, playChime, playCue, primeAudio } from "@/lib/notify";
 import { emitLambingEvent } from "@/lib/timer/events";
 import {
   advance,
@@ -21,6 +21,7 @@ import { getRepository } from "./localAdapter";
 import {
   DEFAULT_LAYOUT,
   DEFAULT_SETTINGS,
+  reconcileLayout,
   type Layout,
   type SessionKind,
   type SessionRecord,
@@ -49,6 +50,7 @@ interface AppState {
   streak: StreakState;
   tasks: Task[];
   layout: Layout;
+  hiddenCards: string[];
   bankedBreakSeconds: number;
   timer: TimerState;
 
@@ -66,6 +68,8 @@ interface AppState {
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
   setLayout: (layout: Layout) => void;
+  hideCard: (id: string) => void;
+  showCard: (id: string) => void;
   resetLayout: () => void;
   clearAll: () => Promise<void>;
 }
@@ -79,6 +83,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   streak: { current: 0, best: 0, lastActiveDay: null },
   tasks: [],
   layout: DEFAULT_LAYOUT,
+  hiddenCards: [],
   bankedBreakSeconds: 0,
   timer: createTimerState("focus", DEFAULT_SETTINGS, 0),
 
@@ -94,11 +99,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       sessions: state.sessions,
       streak: state.streak,
       tasks: state.tasks,
-      // Drop any card ids we no longer render, and append ones added since.
-      layout: [
-        ...state.layout.filter((id) => DEFAULT_LAYOUT.includes(id)),
-        ...DEFAULT_LAYOUT.filter((id) => !state.layout.includes(id)),
-      ],
+      layout: reconcileLayout(state.layout),
+      // Kept out of `layout` on purpose — see `visibleCards`.
+      hiddenCards: state.hiddenCards.filter((id) => DEFAULT_LAYOUT.includes(id)),
       bankedBreakSeconds: state.bankedBreakSeconds,
       timer: createTimerState(
         "focus",
@@ -123,13 +126,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     const now = Date.now();
 
     if (timer.phase === "running") {
+      if (settings.uiSoundsEnabled) playCue("pause");
       set({ timer: pauseTimer(timer, now) });
       return;
     }
 
     // Pressing Start is the user gesture that unlocks audio playback, so this
-    // is the only reliable place to open the AudioContext.
-    if (settings.soundEnabled) primeAudio();
+    // is the only reliable place to open the AudioContext. It has to consider
+    // both toggles, or cues stay silent when only they are switched on.
+    if (settings.soundEnabled || settings.uiSoundsEnabled) primeAudio();
+    if (settings.uiSoundsEnabled) {
+      playCue(timer.phase === "paused" ? "resume" : "start");
+    }
 
     const started = startTimer(timer, now);
     set({ timer: started });
@@ -162,6 +170,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   reset() {
     const { timer, settings, bankedBreakSeconds } = get();
+    if (settings.uiSoundsEnabled) playCue("reset");
     set({ timer: resetTimer(timer, settings, bankedBreakSeconds) });
   },
 
@@ -262,9 +271,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   skip() {
-    const { timer } = get();
+    const { timer, settings, bankedBreakSeconds } = get();
+    if (settings.uiSoundsEnabled) playCue("skip");
     if (timer.phase === "idle") {
-      const { settings, bankedBreakSeconds } = get();
       set({ timer: advance(timer, settings, bankedBreakSeconds) });
       return;
     }
@@ -330,9 +339,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ layout });
   },
 
+  hideCard(id) {
+    const { hiddenCards } = get();
+    if (hiddenCards.includes(id)) return;
+    const next = [...hiddenCards, id];
+    void repository.saveHiddenCards(next);
+    set({ hiddenCards: next });
+  },
+
+  showCard(id) {
+    const next = get().hiddenCards.filter((card) => card !== id);
+    void repository.saveHiddenCards(next);
+    set({ hiddenCards: next });
+  },
+
   resetLayout() {
+    // Also the escape hatch for having hidden everything.
     void repository.saveLayout(DEFAULT_LAYOUT);
-    set({ layout: [...DEFAULT_LAYOUT] });
+    void repository.saveHiddenCards([]);
+    set({ layout: [...DEFAULT_LAYOUT], hiddenCards: [] });
   },
 
   async clearAll() {
@@ -343,6 +368,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       streak: { current: 0, best: 0, lastActiveDay: null },
       tasks: [],
       layout: [...DEFAULT_LAYOUT],
+      hiddenCards: [],
       bankedBreakSeconds: 0,
       timer: createTimerState("focus", DEFAULT_SETTINGS, 0),
     });

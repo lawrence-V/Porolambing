@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { useDocumentTitle, useTimerTick } from "@/lib/timer/useTimer";
+import { cn } from "@/lib/cn";
 import { BentoGrid } from "./BentoGrid";
 import { FlowSettingsModal } from "./FlowSettingsModal";
 import { MiniTimer } from "./MiniTimer";
@@ -13,6 +14,7 @@ import { SupportModal } from "./SupportModal";
 export function AppShell() {
   const hydrate = useAppStore((state) => state.hydrate);
   const hydrated = useAppStore((state) => state.hydrated);
+  const collapsed = useAppStore((state) => state.settings.sidebarCollapsed);
   const now = useTimerTick();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
@@ -37,8 +39,13 @@ export function AppShell() {
       <SideNav {...nav} />
       <TopBar {...nav} />
 
-      {/* The left offset matches the rail's width; below `lg` there is no rail. */}
-      <main className="px-4 py-6 lg:pl-64">
+      {/* The left offset tracks the rail's width; below `lg` there is no rail. */}
+      <main
+        className={cn(
+          "px-4 py-6 transition-[padding] duration-200",
+          collapsed ? "lg:pl-22" : "lg:pl-64",
+        )}
+      >
         <div className="mx-auto max-w-7xl">
           <BentoGrid now={now} onOpenFlowSettings={() => setFlowOpen(true)} />
         </div>
