@@ -12,13 +12,11 @@ import { CompanionAvatar } from "./CompanionAvatar";
 interface LambingChatCardProps {
   /** Wall clock from `useTimerTick`, for the waiting counter. */
   now?: number;
-  compact?: boolean;
   className?: string;
 }
 
 export function LambingChatCard({
   now = 0,
-  compact,
   className,
 }: LambingChatCardProps) {
   const companionName = useAppStore((state) => state.settings.companionName);
@@ -84,7 +82,7 @@ export function LambingChatCard({
         ref={scrollRef}
         className={cn(
           "flex flex-1 flex-col justify-end gap-2 overflow-y-auto pr-1",
-          compact ? "max-h-52 min-h-28" : "max-h-72 min-h-36",
+          "max-h-72 min-h-36",
         )}
       >
         {messages.map((message) => (

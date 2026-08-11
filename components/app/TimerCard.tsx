@@ -30,15 +30,12 @@ const KIND_TINT: Record<SessionKind, string> = {
 
 interface TimerCardProps {
   now: number;
-  /** Tighter type and controls, for the phone mockup and small screens. */
-  compact?: boolean;
   className?: string;
   onOpenFlowSettings?: () => void;
 }
 
 export function TimerCard({
   now,
-  compact = false,
   className,
   onOpenFlowSettings,
 }: TimerCardProps) {
@@ -177,8 +174,8 @@ export function TimerCard({
 
         <div className="relative grid place-items-center">
           <svg
-            width={compact ? 160 : 180}
-            height={compact ? 160 : 180}
+            width={180}
+            height={180}
             viewBox="0 0 128 128"
             className="-rotate-90"
             aria-hidden
@@ -210,7 +207,7 @@ export function TimerCard({
             <span
               className={cn(
                 "font-display tabular text-ink",
-                compact ? "text-[2.75rem]" : "text-[3.25rem]",
+                "text-[3.25rem]",
               )}
             >
               {formatClock(seconds)}
@@ -244,11 +241,11 @@ export function TimerCard({
             eye lands on Start rather than scanning three equal buttons. */}
         <div className="mt-5 flex items-center gap-2">
           <Button
-            size={compact ? "lg" : "xl"}
+            size="xl"
             onClick={startOrPause}
             disabled={!canStart}
             title={canStart ? undefined : "Earn some break time first"}
-            className={compact ? "min-w-32" : "min-w-40"}
+            className="min-w-40"
           >
             {running ? "Pause" : timer.phase === "paused" ? "Resume" : "Start"}
           </Button>

@@ -9,7 +9,7 @@ import { useAppStore } from "@/lib/store/useAppStore";
 import type { SessionKind } from "@/lib/store/types";
 import { emitLambingEvent } from "@/lib/timer/events";
 import { useTimerTick } from "@/lib/timer/useTimer";
-import { PhoneFrame } from "./PhoneFrame";
+import { PHONE_LOGICAL_WIDTH, PhoneFrame } from "./PhoneFrame";
 
 interface DemoControls {
   startOrPause: () => void;
@@ -42,7 +42,6 @@ const BEATS: Array<{ at: number; run: (controls: DemoControls) => void }> = [
  */
 export function PhoneHero() {
   const section = useRef<HTMLDivElement>(null);
-  const screen = useRef<HTMLDivElement>(null);
   const now = useTimerTick();
   const startOrPause = useAppStore((state) => state.startOrPause);
   const switchKind = useAppStore((state) => state.switchKind);
@@ -54,8 +53,7 @@ export function PhoneHero() {
 
   useEffect(() => {
     const root = section.current;
-    const inner = screen.current;
-    if (!root || !inner) return;
+    if (!root) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     gsap.registerPlugin(ScrollTrigger);
@@ -63,7 +61,19 @@ export function PhoneHero() {
     const fired = new Set<number>();
 
     const context = gsap.context(() => {
-      const overflow = Math.max(0, inner.scrollHeight - inner.clientHeight);
+      const inner = root.querySelector<HTMLElement>("[data-phone-screen]");
+      const scroller = root.querySelector<HTMLElement>("[data-phone-scroll]");
+      if (!inner || !scroller) return;
+
+      // The screen renders a 390px-wide phone scaled down to the frame, and
+      // this element lives inside that scale. Its layout height is therefore
+      // unscaled, while the viewport it has to fit is real pixels — so the
+      // distance to travel has to be converted back into logical px.
+      const scale = inner.clientWidth / PHONE_LOGICAL_WIDTH || 1;
+      const overflow = Math.max(
+        0,
+        scroller.scrollHeight - inner.clientHeight / scale,
+      );
 
       const trigger = ScrollTrigger.create({
         trigger: root,
@@ -73,7 +83,7 @@ export function PhoneHero() {
         scrub: 0.6,
         onUpdate: (self) => {
           // Scroll the app UI inside the screen.
-          gsap.set(inner.firstElementChild, {
+          gsap.set(scroller, {
             y: -overflow * self.progress,
           });
 
@@ -136,11 +146,9 @@ export function PhoneHero() {
 
         <div className="flex justify-center lg:justify-end">
           <PhoneFrame>
-            <div ref={screen} className="h-full overflow-hidden">
-              <div className="space-y-3 p-3">
-                <TimerCard now={now} compact />
-                <LambingChatCard now={now} compact />
-              </div>
+            <div className="space-y-4 p-4">
+              <TimerCard now={now} />
+              <LambingChatCard now={now} />
             </div>
           </PhoneFrame>
         </div>

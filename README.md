@@ -152,6 +152,16 @@ new adapter and changing the single line in `getRepository()`.
 Scrolling drives a real session through it. Nothing there is ever written to
 storage.
 
+`PhoneFrame` renders those cards at a real phone's **390px logical width** and
+then scales the whole layer down to whatever the frame is (a ResizeObserver
+keeps the factor right). The earlier approach — a `compact` prop that shrank
+the ring, the buttons and the type — was squeezing a 390px layout into 276px,
+so the controls overflowed and it drifted out of step every time the app's
+type scale changed. Scaling can't overflow and shows the app exactly as it
+looks on a phone. The scroll animation moves `[data-phone-scroll]`, which sits
+*inside* the transform, so its travel distance is converted back into logical
+pixels.
+
 ### Flow mode
 
 Classic counts a fixed session down. Flow counts work *up* to a **max work
