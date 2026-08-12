@@ -3,7 +3,6 @@ import type {
   PersistedState,
   SessionRecord,
   Settings,
-  StreakState,
   Task,
 } from "./types";
 
@@ -22,9 +21,6 @@ export interface Repository {
   getSessions(): Promise<SessionRecord[]>;
   appendSession(session: SessionRecord): Promise<void>;
 
-  getStreak(): Promise<StreakState>;
-  saveStreak(streak: StreakState): Promise<void>;
-
   getTasks(): Promise<Task[]>;
   saveTasks(tasks: Task[]): Promise<void>;
 
@@ -33,6 +29,9 @@ export interface Repository {
 
   getHiddenCards(): Promise<string[]>;
   saveHiddenCards(hidden: string[]): Promise<void>;
+
+  getActiveTaskId(): Promise<string | null>;
+  saveActiveTaskId(id: string | null): Promise<void>;
 
   getBankedBreakSeconds(): Promise<number>;
   saveBankedBreakSeconds(seconds: number): Promise<void>;

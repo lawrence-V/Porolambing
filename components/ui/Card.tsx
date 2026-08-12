@@ -8,8 +8,18 @@ import {
 } from "react";
 import { cn } from "@/lib/cn";
 
+/**
+ * How much of the page's attention a card is asking for. Six identical white
+ * rectangles gave the timer the same weight as the log; this is what lets the
+ * grid have a hierarchy.
+ */
+export type CardWeight = "hero" | "normal" | "quiet";
+
 interface CardProps {
   children: ReactNode;
+  weight?: CardWeight;
+  /** Overrides the white fill — used by the hero timer's session colour. */
+  fill?: string;
   className?: string;
   /** Rendered in the card's top-left as a mono micro-label. */
   label?: string;
@@ -62,14 +72,31 @@ function GripIcon() {
   );
 }
 
-export function Card({ children, className, label, action }: CardProps) {
+const WEIGHT: Record<CardWeight, string> = {
+  hero: "p-6 shadow-[6px_6px_0_0_var(--color-ink)]",
+  normal: "p-5 shadow-[3px_3px_0_0_var(--color-ink)]",
+  quiet: "p-5 shadow-[2px_2px_0_0_var(--color-ink)]",
+};
+
+export function Card({
+  children,
+  weight = "normal",
+  fill,
+  className,
+  label,
+  action,
+}: CardProps) {
   const chrome = useContext(CardChromeContext);
 
   return (
     <section
+      style={fill ? { background: fill } : undefined}
       className={cn(
-        "relative flex h-full flex-col rounded-3xl border-2 border-ink bg-white p-5",
-        "shadow-[4px_4px_0_0_var(--color-ink)]",
+        "relative flex h-full flex-col rounded-3xl border-2 border-ink",
+        // A 600ms fade so the session colour breathes in rather than flicks.
+        "transition-[background-color,background] duration-[600ms]",
+        !fill && "bg-white",
+        WEIGHT[weight],
         className,
       )}
     >

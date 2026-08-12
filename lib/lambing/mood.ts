@@ -16,8 +16,10 @@ export function moodFor(
   phase: Phase,
   elapsedSeconds: number,
 ): CompanionMood {
-  if (phase !== "running") return "sweet";
-  if (kind !== "focus") return "excited";
+  // A paused focus session is still a focus session — the companion should
+  // keep waiting rather than becoming available the moment you hit pause.
+  if (phase === "idle") return "sweet";
+  if (kind !== "focus") return phase === "running" ? "excited" : "sweet";
   return elapsedSeconds >= DROWSY_AFTER_SECONDS ? "sleepy" : "sweet";
 }
 
@@ -28,7 +30,7 @@ export interface CompanionStatus {
 }
 
 export function statusFor(kind: SessionKind, phase: Phase): CompanionStatus {
-  if (phase !== "running") return { label: "Always waiting", waiting: false };
+  if (phase === "idle") return { label: "Always waiting", waiting: false };
   if (kind !== "focus") return { label: "Kasama mo", waiting: false };
   return { label: "Naghihintay", waiting: true };
 }

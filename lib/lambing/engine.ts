@@ -1,5 +1,7 @@
 import type { TriggerContext } from "@/lib/timer/events";
-import { CHIPS, LINES } from "./lines";
+import { FALLBACKS, INTENTS } from "./intents.ts";
+import { CHIPS, LINES } from "./lines.ts";
+import { bestMatch } from "./matching.ts";
 import type {
   Intensity,
   LambingChip,
@@ -7,10 +9,14 @@ import type {
   LambingProvider,
   LambingReply,
   LambingRequest,
-} from "./types";
+  PersonaId,
+} from "./types.ts";
 
 /** How many recently-used line ids to refuse to repeat. */
 const MEMORY_SIZE = 12;
+
+/** Offered when a reply would otherwise leave nothing to tap. */
+const KEEP_TALKING = ["more", "im-okay"];
 
 function fillSlots(
   text: string,
@@ -24,11 +30,11 @@ function fillSlots(
     // Without a name set, second person reads better than an empty slot.
     user: request.userName || "ikaw",
     minutes: String(context.minutes ?? 0),
-    streak: String(context.streak ?? 0),
     banked: String(context.bankedBreakMinutes ?? 0),
     days: String(context.daysAway ?? 0),
     awayMinutes: String(context.awayMinutes ?? 0),
     cycles: String(context.cycles ?? 0),
+    task: context.task ?? "",
   };
   return text.replace(/\{(\w+)\}/g, (match, key: string) =>
     key in replacements ? replacements[key] : match,
@@ -43,15 +49,25 @@ function toBubbles(text: string): string[] {
 }
 
 /**
- * Longer sessions and bigger milestones earn needier lines. A 5-minute break
- * gets a gentle nudge; forty minutes of focus earns the dramatic reunion.
+ * How clingy the companion is allowed to be.
+ *
+ * Total focus sessions set the baseline — the companion earns familiarity
+ * rather than being equally needy on session one and session fifty — and the
+ * current session nudges it from there. This used to key off the streak, which
+ * meant one missed day reset the relationship to strangers.
  */
-function preferredIntensity(context: TriggerContext): Intensity {
+export function preferredIntensity(context: TriggerContext): Intensity {
+  const sessions = context.sessionsTotal ?? 0;
   const minutes = context.minutes ?? 0;
   const days = context.daysAway ?? 0;
-  if (days >= 3 || minutes >= 40) return 3;
-  if (days >= 1 || minutes >= 20) return 2;
-  return 1;
+
+  let level = sessions >= 50 ? 3 : sessions >= 10 ? 2 : 1;
+
+  // A long stretch of work, or a long absence, earns one step more.
+  if (minutes >= 40 || days >= 3) level += 1;
+  else if (minutes >= 20 || days >= 1) level += 0.5;
+
+  return Math.min(3, Math.max(1, Math.round(level))) as Intensity;
 }
 
 function weightFor(line: LambingLine, target: Intensity): number {
@@ -72,16 +88,33 @@ function weightedPick<T>(items: T[], weight: (item: T) => number): T | null {
   return items[items.length - 1];
 }
 
-function resolveChips(ids: string[] | undefined): LambingChip[] {
+/** A persona-less entry belongs to everyone. */
+function forPersona<T extends { persona?: PersonaId }>(
+  items: T[],
+  persona: PersonaId,
+): T[] {
+  return items.filter((item) => !item.persona || item.persona === persona);
+}
+
+function resolveChips(
+  ids: string[] | undefined,
+  persona: PersonaId,
+): LambingChip[] {
   if (!ids) return [];
   return ids
-    .map((id) => CHIPS[id])
+    .map((id) => {
+      const matches = CHIPS.filter((chip) => chip.id === id);
+      return (
+        matches.find((chip) => chip.persona === persona) ??
+        matches.find((chip) => !chip.persona)
+      );
+    })
     .filter((chip): chip is LambingChip => Boolean(chip));
 }
 
 /**
- * A fully local lambing provider. No network, no API key, no cost — every line
- * is picked from the bank in `lines.ts` and rendered client-side.
+ * A fully local lambing provider. No network, no API key, no cost — lines come
+ * from `lines.ts` and typed messages are matched against `intents.ts`.
  */
 export class LocalLambingProvider implements LambingProvider {
   /** Ring buffer of recently used line/response ids. */
@@ -96,8 +129,38 @@ export class LocalLambingProvider implements LambingProvider {
     return this.recent.includes(id);
   }
 
+  /**
+   * Never hand back a reply with nothing to tap. Guaranteed here rather than
+   * in every chip definition, so a tap-only user can't hit a wall.
+   */
+  private withWayOut(
+    bubbles: string[],
+    chips: LambingChip[],
+    persona: PersonaId,
+  ): LambingReply {
+    return {
+      bubbles,
+      chips: chips.length > 0 ? chips : resolveChips(KEEP_TALKING, persona),
+    };
+  }
+
+  /** Pick from a pool, preferring entries not seen recently. */
+  private pickFresh<T>(pool: T[], id: (item: T) => string): T | null {
+    if (pool.length === 0) return null;
+    const fresh = pool.filter((item) => !this.isStale(id(item)));
+    const usable = fresh.length > 0 ? fresh : pool;
+    const choice = usable[Math.floor(Math.random() * usable.length)];
+    this.remember(id(choice));
+    return choice;
+  }
+
   async respond(request: LambingRequest): Promise<LambingReply | null> {
-    const candidates = LINES.filter((line) => line.trigger === request.trigger);
+    const candidates = forPersona(LINES, request.persona).filter(
+      (line) =>
+        line.trigger === request.trigger &&
+        // A line that names the task is worse than silence when there is none.
+        (!line.requiresTask || Boolean(request.context.task)),
+    );
     if (candidates.length === 0) return null;
 
     // Prefer lines we haven't shown recently, but never go silent: if the whole
@@ -113,39 +176,80 @@ export class LocalLambingProvider implements LambingProvider {
 
     this.remember(line.id);
 
-    return {
-      bubbles: toBubbles(fillSlots(line.text, request)),
-      chips: resolveChips(line.chips),
-    };
+    return this.withWayOut(
+      toBubbles(fillSlots(line.text, request)),
+      resolveChips(line.chips, request.persona),
+      request.persona,
+    );
   }
 
   async respondToChip(
     chipId: string,
     request: Omit<LambingRequest, "trigger">,
   ): Promise<LambingReply | null> {
-    const chip = CHIPS[chipId];
+    const chip = resolveChips([chipId], request.persona)[0];
     if (!chip) return null;
 
-    const indexed = chip.responses.map((text, index) => ({
-      id: `${chip.id}:${index}`,
-      text,
-    }));
-    const fresh = indexed.filter((entry) => !this.isStale(entry.id));
-    const pool = fresh.length > 0 ? fresh : indexed;
-    const choice = pool[Math.floor(Math.random() * pool.length)];
+    const choice = this.pickFresh(
+      chip.responses.map((text, index) => ({ id: `${chip.id}:${index}`, text })),
+      (entry) => entry.id,
+    );
+    if (!choice) return null;
 
-    this.remember(choice.id);
+    return this.withWayOut(
+      toBubbles(fillSlots(choice.text, request)),
+      resolveChips(chip.followUp, request.persona),
+      request.persona,
+    );
+  }
 
-    return {
-      bubbles: toBubbles(fillSlots(choice.text, request)),
-      chips: resolveChips(chip.followUp),
-    };
+  async respondToText(
+    text: string,
+    request: Omit<LambingRequest, "trigger">,
+  ): Promise<LambingReply | null> {
+    const match = bestMatch(text, forPersona(INTENTS, request.persona));
+
+    // Misses are common and must never read as a parser failing. The fallback
+    // hands the turn back instead of admitting it didn't understand.
+    const pool = match
+      ? match.item.responses.map((response, index) => ({
+          id: `${match.item.id}:${index}`,
+          text: response,
+        }))
+      : FALLBACKS.map((response, index) => ({
+          id: `fallback:${index}`,
+          text: response,
+        }));
+
+    const choice = this.pickFresh(pool, (entry) => entry.id);
+    if (!choice) return null;
+
+    return this.withWayOut(
+      toBubbles(fillSlots(choice.text, request)),
+      resolveChips(match?.item.chips, request.persona),
+      request.persona,
+    );
   }
 }
 
-/** Roughly how long the companion "types" a bubble before it lands. */
-export function typingDelayFor(text: string): number {
-  const base = 420;
-  const perCharacter = 22;
-  return Math.min(1600, base + text.length * perCharacter);
+/** Milliseconds before the companion starts typing at all. */
+const THINKING_MIN = 350;
+const THINKING_MAX = 900;
+
+/**
+ * When each bubble should land, as cumulative delays.
+ *
+ * A single linear formula made every message arrive at exactly the same rate,
+ * which reads as a machine on a timer. A thinking pause plus per-bubble jitter
+ * is what makes it feel like someone actually typing.
+ */
+export function typingPlan(bubbles: string[]): number[] {
+  let elapsed = THINKING_MIN + Math.random() * (THINKING_MAX - THINKING_MIN);
+
+  return bubbles.map((text) => {
+    const base = 260 + text.length * 18;
+    const jitter = 0.8 + Math.random() * 0.4;
+    elapsed += Math.min(1800, base * jitter);
+    return Math.round(elapsed);
+  });
 }

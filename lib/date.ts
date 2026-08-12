@@ -1,4 +1,4 @@
-/** Local-time day bucket, `YYYY-MM-DD`. Shared so the streak logic and the
+/** Local-time day bucket, `YYYY-MM-DD`. Shared so the session log and the
  *  week chart can never disagree about where a day starts. */
 export function dayKey(timestamp: number): string {
   const date = new Date(timestamp);

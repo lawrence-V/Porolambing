@@ -227,11 +227,10 @@ test("a hidden card survives the layout reconciliation", () => {
 
 test("reconcileLayout keeps order, drops unknowns, appends new cards", () => {
   // A user's saved order, missing a card added since and carrying a stale one.
-  const stored = ["chat", "timer", "retired-card", "streak", "tasks", "log"];
+  const stored = ["chat", "timer", "retired-card", "tasks", "log"];
   assert.deepEqual(reconcileLayout(stored), [
     "chat",
     "timer",
-    "streak",
     "tasks",
     "log",
     "week",

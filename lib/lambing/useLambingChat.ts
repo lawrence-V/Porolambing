@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { onLambingEvent, type LambingEvent } from "@/lib/timer/events";
-import { LocalLambingProvider, typingDelayFor } from "./engine";
+import { LocalLambingProvider, typingPlan } from "./engine";
 import { CHIPS } from "./lines";
-import type { ChatMessage, LambingChip, LambingReply } from "./types";
+import type {
+  ChatMessage,
+  LambingChip,
+  LambingReply,
+  PersonaId,
+} from "./types";
 
 /** Cap the thread so a long day doesn't turn into an unbounded DOM. */
 const MAX_MESSAGES = 60;
@@ -19,6 +24,7 @@ export interface LambingChatState {
   chips: LambingChip[];
   typing: boolean;
   sendChip: (chip: LambingChip) => void;
+  sendText: (text: string) => void;
 }
 
 /**
@@ -38,16 +44,18 @@ export function useLambingChat(): LambingChatState {
   const [typing, setTyping] = useState(false);
 
   // Latest names without making the event subscription depend on them.
-  const namesRef = useRef({
+  const voiceRef = useRef({
+    persona: settings.persona,
     companionName: settings.companionName,
     userName: settings.userName,
   });
   useEffect(() => {
-    namesRef.current = {
+    voiceRef.current = {
+      persona: settings.persona,
       companionName: settings.companionName,
       userName: settings.userName,
     };
-  }, [settings.companionName, settings.userName]);
+  }, [settings.persona, settings.companionName, settings.userName]);
 
   // Replies play out over time, so a reply that starts while another is still
   // typing has to interrupt it — otherwise bubbles from two different moments
@@ -70,9 +78,8 @@ export function useLambingChat(): LambingChatState {
       setChips([]);
       setTyping(true);
 
-      let delay = 0;
+      const schedule = typingPlan(reply.bubbles);
       reply.bubbles.forEach((text, index) => {
-        delay += typingDelayFor(text);
         const id = window.setTimeout(() => {
           if (playbackToken.current !== token) return;
           setMessages((current) =>
@@ -91,7 +98,7 @@ export function useLambingChat(): LambingChatState {
             setTyping(false);
             setChips(reply.chips);
           }
-        }, delay);
+        }, schedule[index]);
         timeouts.current.push(id);
       });
 
@@ -106,7 +113,7 @@ export function useLambingChat(): LambingChatState {
         .respond({
           trigger: event.trigger,
           context: event.context,
-          ...namesRef.current,
+          ...voiceRef.current,
         })
         .then((reply) => {
           if (reply) play(reply);
@@ -125,7 +132,28 @@ export function useLambingChat(): LambingChatState {
         ].slice(-MAX_MESSAGES),
       );
       void provider
-        .respondToChip(chip.id, { context: {}, ...namesRef.current })
+        .respondToChip(chip.id, { context: {}, ...voiceRef.current })
+        .then((reply) => {
+          if (reply) play(reply);
+        });
+    },
+    [provider, play],
+  );
+
+  const sendText = useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+
+      setChips([]);
+      setMessages((current) =>
+        [
+          ...current,
+          { id: newId(), author: "user" as const, text, at: Date.now() },
+        ].slice(-MAX_MESSAGES),
+      );
+      void provider
+        .respondToText(text, { context: {}, ...voiceRef.current })
         .then((reply) => {
           if (reply) play(reply);
         });
@@ -142,9 +170,9 @@ export function useLambingChat(): LambingChatState {
       play({
         bubbles: [
           "Uy, andito ka na.",
-          "Sabihin mo lang kung kailan tayo magsisimula.",
+          "Kausapin mo ako kahit kailan — nandito lang naman ako.",
         ],
-        chips: [CHIPS.ready],
+        chips: resolveGreetingChips(voiceRef.current.persona),
       });
     }, 500);
     return () => {
@@ -156,5 +184,14 @@ export function useLambingChat(): LambingChatState {
     };
   }, [play]);
 
-  return { messages, chips, typing, sendChip };
+  return { messages, chips, typing, sendChip, sendText };
+}
+
+/** The opening chips, matched to whichever persona is active. */
+function resolveGreetingChips(persona: PersonaId): LambingChip[] {
+  const matches = CHIPS.filter((chip) => chip.id === "ready");
+  const chip =
+    matches.find((entry) => entry.persona === persona) ??
+    matches.find((entry) => !entry.persona);
+  return chip ? [chip] : [];
 }

@@ -19,6 +19,23 @@
   --color-yellow: #f7f780;
   --color-night: #121110;
 
+  /* Grounds the app shifts between as the session changes. Tinted rather than
+     saturated: this is a surface someone stares at for 25 minutes at a time,
+     and the white cards on top have to keep their text contrast. */
+  --ground-idle: #fffdeb;
+  --ground-focus: #fff0e6;
+  --ground-short: #ffeceb;
+  --ground-long: #eaf5ec;
+
+  /* The matching card fill for the hero timer — one step stronger than the
+     ground so it reads as the thing in charge. */
+  /* White at rest, so an idle timer still reads as a card against the
+     cream ground; colour then means "a session is running". */
+  --panel-idle: #ffffff;
+  --panel-focus: #ffe2d2;
+  --panel-short: #ffdcd9;
+  --panel-long: #d8ecdb;
+
   --font-display: var(--font-display), system-ui, sans-serif;
   --font-body: var(--font-body), system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;

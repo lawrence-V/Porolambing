@@ -12,7 +12,6 @@ export type LambingTrigger =
   | "break:start"
   | "break:idle"
   | "break:ending"
-  | "streak:milestone"
   | "user:returned"
   /** First focus session of the day. Fires instead of `focus:start`. */
   | "day:first-session"
@@ -26,11 +25,18 @@ export type LambingTrigger =
 export interface TriggerContext {
   /** Minutes involved in whatever just happened. */
   minutes?: number;
-  streak?: number;
+  /**
+   * Completed focus sessions ever. Replaced the streak as the measure of how
+   * well the companion knows you — same "earns familiarity" idea, without
+   * punishing a missed day.
+   */
+  sessionsTotal?: number;
   kind?: SessionKind;
   /** Days away, for user:returned. */
   daysAway?: number;
   bankedBreakMinutes?: number;
+  /** Title of the active task, when one is set. */
+  task?: string;
   /** Minutes spent away from the tab, for focus:returned. */
   awayMinutes?: number;
   /** Completed focus sessions, for cycle:complete. */

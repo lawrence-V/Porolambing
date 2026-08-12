@@ -1,3 +1,5 @@
+import type { PersonaId } from "@/lib/lambing/types";
+
 export type SessionKind = "focus" | "shortBreak" | "longBreak";
 
 export type TimerStyle = "classic" | "flow";
@@ -13,6 +15,13 @@ export interface SessionRecord {
   /** Seconds actually spent, which is not `endedAt - startedAt` when paused. */
   seconds: number;
   completed: boolean;
+  /** What you were working on, if a task was active. */
+  taskId?: string;
+  /**
+   * A copy of the title, not a lookup. Deleting a task must not blank the
+   * history of the work done on it.
+   */
+  taskTitle?: string;
 }
 
 export interface Settings {
@@ -41,17 +50,12 @@ export interface Settings {
   uiSoundsEnabled: boolean;
   /** Also raise a browser notification, but only when the tab is hidden. */
   notificationsEnabled: boolean;
+  /** Which companion voice to use. */
+  persona: PersonaId;
   /** What the user calls their lambing companion. */
   companionName: string;
   /** What the companion calls the user. */
   userName: string;
-}
-
-export interface StreakState {
-  current: number;
-  best: number;
-  /** YYYY-MM-DD in local time, or null if never. */
-  lastActiveDay: string | null;
 }
 
 export interface Task {
@@ -68,11 +72,12 @@ export interface PersistedState {
   schemaVersion: number;
   settings: Settings;
   sessions: SessionRecord[];
-  streak: StreakState;
   tasks: Task[];
   layout: Layout;
   /** Card ids removed from the grid. See `visibleCards`. */
   hiddenCards: string[];
+  /** The task the timer is currently for, if any. */
+  activeTaskId: string | null;
   /** Break minutes banked in flow mode. */
   bankedBreakSeconds: number;
   /** epoch ms of the last time the app was open, for the welcome-back line. */
@@ -96,6 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
   soundEnabled: true,
   uiSoundsEnabled: true,
   notificationsEnabled: false,
+  persona: "jowa",
   companionName: "Lambing",
   userName: "",
 };
@@ -142,7 +148,6 @@ export function normalizeSettings(settings: Settings): Settings {
 export const DEFAULT_LAYOUT: Layout = [
   "timer",
   "chat",
-  "streak",
   "tasks",
   "week",
   "log",
@@ -152,7 +157,6 @@ export const DEFAULT_LAYOUT: Layout = [
 export const CARD_LABELS: Record<string, string> = {
   timer: "Timer",
   chat: "Lambing",
-  streak: "Streak",
   tasks: "Tasks",
   week: "Last 7 days",
   log: "Today",
@@ -182,17 +186,17 @@ export function reconcileLayout(
   ];
 }
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export function createDefaultState(): PersistedState {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     settings: { ...DEFAULT_SETTINGS },
     sessions: [],
-    streak: { current: 0, best: 0, lastActiveDay: null },
     tasks: [],
     layout: [...DEFAULT_LAYOUT],
     hiddenCards: [],
+    activeTaskId: null,
     bankedBreakSeconds: 0,
     lastSeenAt: null,
   };

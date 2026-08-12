@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { useLambingChat } from "@/lib/lambing/useLambingChat";
 import { moodFor, statusFor } from "@/lib/lambing/mood";
@@ -21,11 +21,14 @@ export function LambingChatCard({
 }: LambingChatCardProps) {
   const companionName = useAppStore((state) => state.settings.companionName);
   const timer = useAppStore((state) => state.timer);
-  const { messages, chips, typing, sendChip } = useLambingChat();
+  const { messages, chips, typing, sendChip, sendText } = useLambingChat();
+  const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const elapsed = elapsedSeconds(timer, now);
-  const focusing = timer.kind === "focus" && timer.phase === "running";
+  // Paused counts as focusing: the waiting state should hold through a
+  // pause rather than the companion becoming available again.
+  const focusing = timer.kind === "focus" && timer.phase !== "idle";
   const mood = moodFor(timer.kind, timer.phase, elapsed);
   const status = statusFor(timer.kind, timer.phase);
 
@@ -37,8 +40,9 @@ export function LambingChatCard({
 
   return (
     <Card
+      weight="hero"
       label="Lambing"
-      className={cn("bg-blush/25", className)}
+      className={className}
       action={
         <span className="flex items-center gap-1.5">
           <span
@@ -155,6 +159,37 @@ export function LambingChatCard({
           </div>
         )
       )}
+
+      {/* Always available, even mid-focus. The rule is that the companion
+          never *initiates* while you work — answering something you chose to
+          type is a different thing. */}
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          sendText(draft);
+          setDraft("");
+        }}
+      >
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder={`Sabihin mo kay ${companionName}…`}
+          aria-label={`Message ${companionName}`}
+          className="h-10 w-full rounded-full border-2 border-ink bg-white px-4 text-base placeholder:text-ink/50 focus:outline-2 focus:outline-offset-2 focus:outline-orange"
+        />
+        <button
+          type="submit"
+          disabled={!draft.trim()}
+          aria-label="Send"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 border-ink bg-ink text-cream transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-30"
+        >
+          <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden>
+            <path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </form>
     </Card>
   );
 }

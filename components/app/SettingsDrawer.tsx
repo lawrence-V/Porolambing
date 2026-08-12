@@ -12,6 +12,7 @@ import {
 } from "@/lib/notify";
 import { Button } from "@/components/ui/Button";
 import { CARD_LABELS, DEFAULT_LAYOUT } from "@/lib/store/types";
+import { PERSONAS } from "@/lib/lambing/types";
 import { cn } from "@/lib/cn";
 
 interface SettingsDrawerProps {
@@ -151,6 +152,11 @@ export function SettingsDrawer({
       <aside
         aria-label="Settings"
         aria-hidden={!open}
+        // The drawer never unmounts, so without this its ~20 controls stay in
+        // the tab order while it is off-screen — tabbing dropped focus into an
+        // invisible panel, and focusable content inside `aria-hidden` is an
+        // outright ARIA violation.
+        inert={!open}
         className={cn(
           "fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col overflow-y-auto",
           "border-l-2 border-ink bg-cream p-6 transition-transform duration-300 ease-out-expo",
@@ -305,6 +311,33 @@ export function SettingsDrawer({
           </div>
 
           <div className="py-3">
+            <p className="mono-label mb-2 opacity-70">Companion</p>
+            <p className="mb-2 text-sm opacity-70">
+              Who you’re working with. Each one has its own voice.
+            </p>
+            <div className="mb-3 flex flex-col gap-2">
+              {PERSONAS.map((persona) => (
+                <button
+                  key={persona.id}
+                  onClick={() => updateSettings({ persona: persona.id })}
+                  aria-pressed={settings.persona === persona.id}
+                  className={cn(
+                    "rounded-2xl border-2 border-ink p-3 text-left transition-colors",
+                    settings.persona === persona.id
+                      ? "bg-ink text-cream"
+                      : "bg-transparent hover:bg-ink/5",
+                  )}
+                >
+                  <span className="block font-semibold">{persona.name}</span>
+                  <span className="block text-sm opacity-70">
+                    {persona.blurb}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="py-3">
             <p className="mono-label mb-2 opacity-70">Names</p>
             <label className="flex items-center justify-between gap-4 py-2.5">
               <span className="text-sm">Companion</span>
@@ -339,7 +372,7 @@ export function SettingsDrawer({
               onClick={() => {
                 if (
                   window.confirm(
-                    "Delete all sessions, streaks and tasks? This can't be undone.",
+                    "Delete all sessions and tasks? This can't be undone.",
                   )
                 ) {
                   void clearAll();

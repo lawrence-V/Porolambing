@@ -30,6 +30,15 @@ export function Hero() {
             floor above ~13vw overflows a 390px screen. */}
         <h1 className="font-display w-full text-center text-cream leading-[0.82] text-[clamp(2rem,13.5vw,16rem)]">
           POROLAMBING
+          {/* The visible heading is one invented word, which describes the page
+              to nobody — not a search engine and not a screen reader. This
+              restates the tagline immediately below it. `sr-only` takes the
+              span out of flow, so the clamp sizing is untouched. */}
+          <span className="sr-only">
+            {" "}
+            — a Filipino pomodoro timer with a companion that checks on you
+            during every break
+          </span>
         </h1>
 
         {/* One oversized object crossing in front of the type, the way Juice's

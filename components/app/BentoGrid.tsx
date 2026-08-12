@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { LambingChatCard } from "./LambingChatCard";
 import { SessionLogCard } from "./SessionLogCard";
-import { StreakCard } from "./StreakCard";
 import { TaskCard } from "./TaskCard";
 import { TimerCard } from "./TimerCard";
 import { WeekCard } from "./WeekCard";
@@ -34,9 +33,11 @@ import { WeekCard } from "./WeekCard";
 const SPANS: Record<string, string> = {
   timer: "md:col-span-2 xl:col-span-2 xl:row-span-2",
   chat: "md:col-span-2 xl:col-span-2 xl:row-span-2",
-  streak: "md:col-span-1",
-  tasks: "md:col-span-1",
-  week: "md:col-span-2",
+  // Tasks and the week split the row evenly. They were 1 and 2 of 4 when the
+  // streak card filled the fourth column; without it that row was 3/4 wide
+  // with a hole at the end.
+  tasks: "md:col-span-1 xl:col-span-2",
+  week: "md:col-span-1 xl:col-span-2",
   log: "md:col-span-2 xl:col-span-4",
 };
 
@@ -80,9 +81,11 @@ function SortableCard({
 export function BentoGrid({
   now,
   onOpenFlowSettings,
+  onEnterFocusMode,
 }: {
   now: number;
   onOpenFlowSettings: () => void;
+  onEnterFocusMode: () => void;
 }) {
   const layout = useAppStore((state) => state.layout);
   const hiddenCards = useAppStore((state) => state.hiddenCards);
@@ -103,10 +106,13 @@ export function BentoGrid({
 
   const cards: Record<string, ReactNode> = {
     timer: (
-      <TimerCard now={now} onOpenFlowSettings={onOpenFlowSettings} />
+      <TimerCard
+        now={now}
+        onOpenFlowSettings={onOpenFlowSettings}
+        onEnterFocusMode={onEnterFocusMode}
+      />
     ),
     chat: <LambingChatCard now={now} />,
-    streak: <StreakCard />,
     tasks: <TaskCard />,
     week: <WeekCard />,
     log: <SessionLogCard />,

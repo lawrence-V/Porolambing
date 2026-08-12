@@ -86,7 +86,7 @@ const FEATURES: Array<{
   {
     label: "01 — The catch",
     title: "Lambing on every break",
-    body: "The timer finishes and a chat opens. It reacts to what you actually did: how long you focused, whether you bailed early, how many days you've kept the streak. Tap a reply and it answers back.",
+    body: "The timer finishes and a chat opens. It reacts to what you actually did: how long you focused, whether you bailed early, how long you've been away. Tap a reply and it answers back.",
     art: <ChatDoodle />,
   },
   {
@@ -98,13 +98,13 @@ const FEATURES: Array<{
   {
     label: "03 — Your layout",
     title: "Drag the whole thing around",
-    body: "Timer, chat, streak, tasks and today's log are cards on a grid. Drag them into whatever order suits you and it stays that way.",
+    body: "Timer, chat, tasks, your week and today's log are cards on a grid. Drag them into whatever order suits you and it stays that way.",
     art: <GridDoodle />,
   },
   {
     label: "04 — No account",
     title: "Everything stays on your device",
-    body: "No signup, no email, no ads. Your sessions, tasks and streaks live in your browser and nowhere else — the site only counts anonymous page visits.",
+    body: "No signup, no email, no ads. Your sessions and tasks live in your browser and nowhere else — the site only counts anonymous page visits.",
     art: <LocalDoodle />,
   },
 ];

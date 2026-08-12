@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { dayKey, daysBetween } from "@/lib/date";
+import { focusCount } from "@/lib/stats";
 import { notifySessionEnd, playChime, playCue, primeAudio } from "@/lib/notify";
 import { emitLambingEvent } from "@/lib/timer/events";
 import {
@@ -26,12 +27,8 @@ import {
   type SessionKind,
   type SessionRecord,
   type Settings,
-  type StreakState,
   type Task,
 } from "./types";
-
-/** Streak celebrations fire on these day counts. */
-const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
 
 /** Days away before the companion notices you were gone. */
 const ABSENCE_DAYS = 1;
@@ -47,14 +44,17 @@ interface AppState {
   hydrated: boolean;
   settings: Settings;
   sessions: SessionRecord[];
-  streak: StreakState;
   tasks: Task[];
   layout: Layout;
   hiddenCards: string[];
+  activeTaskId: string | null;
   bankedBreakSeconds: number;
   timer: TimerState;
 
   hydrate: () => Promise<void>;
+
+  /** The task the timer is for, resolved from `activeTaskId`. */
+  activeTask: () => Task | null;
 
   startOrPause: () => void;
   reset: () => void;
@@ -67,7 +67,10 @@ interface AppState {
   addTask: (title: string) => void;
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
+  /** Clear the finished pile in one write, rather than N calls to `removeTask`. */
+  clearDoneTasks: () => void;
   setLayout: (layout: Layout) => void;
+  setActiveTask: (id: string | null) => void;
   hideCard: (id: string) => void;
   showCard: (id: string) => void;
   resetLayout: () => void;
@@ -80,10 +83,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   hydrated: false,
   settings: DEFAULT_SETTINGS,
   sessions: [],
-  streak: { current: 0, best: 0, lastActiveDay: null },
   tasks: [],
   layout: DEFAULT_LAYOUT,
   hiddenCards: [],
+  activeTaskId: null,
   bankedBreakSeconds: 0,
   timer: createTimerState("focus", DEFAULT_SETTINGS, 0),
 
@@ -97,11 +100,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       hydrated: true,
       settings: state.settings,
       sessions: state.sessions,
-      streak: state.streak,
       tasks: state.tasks,
       layout: reconcileLayout(state.layout),
       // Kept out of `layout` on purpose — see `visibleCards`.
       hiddenCards: state.hiddenCards.filter((id) => DEFAULT_LAYOUT.includes(id)),
+      // A task deleted in a previous session must not stay "active".
+      activeTaskId: state.tasks.some((task) => task.id === state.activeTaskId)
+        ? state.activeTaskId
+        : null,
       bankedBreakSeconds: state.bankedBreakSeconds,
       timer: createTimerState(
         "focus",
@@ -115,10 +121,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (daysAway >= ABSENCE_DAYS) {
         emitLambingEvent("user:returned", {
           daysAway,
-          streak: state.streak.current,
+          sessionsTotal: focusCount(state.sessions),
         });
       }
     }
+  },
+
+  activeTask() {
+    const { tasks, activeTaskId } = get();
+    return tasks.find((task) => task.id === activeTaskId) ?? null;
   },
 
   startOrPause() {
@@ -156,7 +167,8 @@ export const useAppStore = create<AppState>((set, get) => ({
               ? 0
               : Math.round(started.targetSeconds / 60),
           kind: "focus",
-          streak: get().streak.current,
+          sessionsTotal: focusCount(get().sessions),
+          task: get().activeTask()?.title,
         });
       } else {
         emitLambingEvent("break:start", {
@@ -175,7 +187,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   finish({ completed = true } = {}) {
-    const { timer, settings, sessions, streak, bankedBreakSeconds } = get();
+    const { timer, settings, sessions, bankedBreakSeconds } = get();
     if (timer.phase === "idle") return;
 
     const now = Date.now();
@@ -183,6 +195,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const seconds = elapsedSeconds(finished, now);
     const minutes = Math.round(seconds / 60);
 
+    // The title is copied, not referenced: deleting the task later must not
+    // blank the record of the work done on it.
+    const task = timer.kind === "focus" ? get().activeTask() : null;
     const record: SessionRecord = {
       id: newId(),
       kind: timer.kind,
@@ -190,6 +205,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       endedAt: now,
       seconds,
       completed,
+      ...(task ? { taskId: task.id, taskTitle: task.title } : {}),
     };
     const nextSessions = [...sessions, record];
     void repository.appendSession(record);
@@ -204,31 +220,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       void repository.saveBankedBreakSeconds(nextBanked);
     }
 
-    // Streaks only count focus work, and only once per day.
-    let nextStreak = streak;
-    if (timer.kind === "focus" && completed) {
-      const today = dayKey(now);
-      if (streak.lastActiveDay !== today) {
-        const gap =
-          streak.lastActiveDay === null
-            ? Infinity
-            : daysBetween(streak.lastActiveDay, today);
-        const current = gap === 1 ? streak.current + 1 : 1;
-        nextStreak = {
-          current,
-          best: Math.max(streak.best, current),
-          lastActiveDay: today,
-        };
-        void repository.saveStreak(nextStreak);
-      }
-    }
-
     const nextTimer = advance(finished, settings, nextBanked);
 
     set({
       timer: nextTimer,
       sessions: nextSessions,
-      streak: nextStreak,
       bankedBreakSeconds: nextBanked,
     });
 
@@ -242,22 +238,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (timer.kind === "focus") {
       emitLambingEvent(completed ? "focus:complete" : "focus:abandoned", {
+        task: task?.title,
         minutes,
         kind: "focus",
-        streak: nextStreak.current,
+        sessionsTotal: focusCount(nextSessions),
       });
-      if (
-        completed &&
-        nextStreak.current !== streak.current &&
-        STREAK_MILESTONES.includes(nextStreak.current)
-      ) {
-        emitLambingEvent("streak:milestone", { streak: nextStreak.current });
-      }
     } else if (completed && timer.kind === "longBreak") {
       // Finishing the long break means a whole set of cycles is behind you.
       emitLambingEvent("cycle:complete", {
         cycles: settings.cyclesBeforeLongBreak,
-        streak: nextStreak.current,
+        sessionsTotal: focusCount(nextSessions),
       });
     }
 
@@ -326,17 +316,38 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     void repository.saveTasks(tasks);
     set({ tasks });
+
+    // Finishing the active task clears it — you're not working on it any more.
+    const finished = tasks.find((task) => task.id === id);
+    if (finished?.done && get().activeTaskId === id) get().setActiveTask(null);
   },
 
   removeTask(id) {
     const tasks = get().tasks.filter((task) => task.id !== id);
     void repository.saveTasks(tasks);
     set({ tasks });
+    if (get().activeTaskId === id) get().setActiveTask(null);
+  },
+
+  clearDoneTasks() {
+    const tasks = get().tasks.filter((task) => !task.done);
+    void repository.saveTasks(tasks);
+    set({ tasks });
+    // `toggleTask` already clears the active task when it's finished, so this
+    // can't be stranding one — but a payload written by an older build could.
+    if (!tasks.some((task) => task.id === get().activeTaskId)) {
+      get().setActiveTask(null);
+    }
   },
 
   setLayout(layout) {
     void repository.saveLayout(layout);
     set({ layout });
+  },
+
+  setActiveTask(id) {
+    void repository.saveActiveTaskId(id);
+    set({ activeTaskId: id });
   },
 
   hideCard(id) {
@@ -365,10 +376,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       settings: DEFAULT_SETTINGS,
       sessions: [],
-      streak: { current: 0, best: 0, lastActiveDay: null },
       tasks: [],
       layout: [...DEFAULT_LAYOUT],
       hiddenCards: [],
+      activeTaskId: null,
       bankedBreakSeconds: 0,
       timer: createTimerState("focus", DEFAULT_SETTINGS, 0),
     });

@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { useAppStore } from "@/lib/store/useAppStore";
+import { moodFor, statusFor } from "@/lib/lambing/mood";
+import { focusCount, focusSeconds, formatDuration, sessionsOn } from "@/lib/stats";
+import { elapsedSeconds } from "@/lib/timer/machine";
 import { CREDIT } from "@/lib/support";
 import { cn } from "@/lib/cn";
 import { CompanionAvatar } from "./CompanionAvatar";
 
 interface NavProps {
+  /** Wall clock from `useTimerTick`, so the rail doesn't read the clock
+   *  during render. */
+  now: number;
   hydrated: boolean;
   onOpenSupport: () => void;
   onOpenSettings: () => void;
@@ -65,8 +71,63 @@ export function Credit({ className }: { className?: string }) {
   );
 }
 
+/**
+ * The companion, always present. The chat card can be scrolled past or hidden
+ * outright, and the whole point of the app is that someone is waiting for you
+ * — so the rail keeps it in view with its live mood and status.
+ */
+function CompanionPresence({ now }: { now: number }) {
+  const timer = useAppStore((state) => state.timer);
+  const companionName = useAppStore((state) => state.settings.companionName);
+
+  const elapsed = elapsedSeconds(timer, now);
+  const status = statusFor(timer.kind, timer.phase);
+  const focusing = timer.kind === "focus" && timer.phase !== "idle";
+
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border-2 border-ink/10 bg-ink/[0.03] p-3">
+      <CompanionAvatar
+        className="h-12 w-12 shrink-0"
+        mood={moodFor(timer.kind, timer.phase, elapsed)}
+        style={
+          focusing ? { animation: "breathe 3.4s ease-in-out infinite" } : undefined
+        }
+      />
+      <span className="min-w-0 leading-tight">
+        <span className="block truncate font-semibold">{companionName}</span>
+        <span className="mono-label block leading-snug opacity-70">
+          {status.label}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Today's numbers, from the same helpers the cards use. */
+function TodayStats() {
+  const sessions = useAppStore((state) => state.sessions);
+
+  const todays = sessionsOn(sessions);
+  const stats: Array<[string, string]> = [
+    ["Focused", formatDuration(focusSeconds(todays))],
+    ["Sessions", String(focusCount(todays))],
+    ["All time", formatDuration(focusSeconds(sessions))],
+  ];
+
+  return (
+    <dl className="flex flex-col gap-2">
+      {stats.map(([label, value]) => (
+        <div key={label} className="flex items-baseline justify-between gap-2">
+          <dt className="mono-label opacity-70">{label}</dt>
+          <dd className="font-display-wide text-xl">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /** Fixed rail, `lg` and up. Below that `TopBar` renders instead. */
-export function SideNav({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
+export function SideNav({ now, hydrated, onOpenSupport, onOpenSettings }: NavProps) {
   const collapsed = useAppStore((state) => state.settings.sidebarCollapsed);
   const updateSettings = useAppStore((state) => state.updateSettings);
 
@@ -85,7 +146,7 @@ export function SideNav({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
           collapsed ? "justify-center" : "px-1",
         )}
       >
-        <CompanionAvatar className="h-9 w-9 shrink-0" />
+        <CompanionAvatar className="h-11 w-11 shrink-0" />
         {!collapsed && <span className="font-display text-2xl">POROLAMBING</span>}
       </Link>
 
@@ -112,7 +173,14 @@ export function SideNav({ hydrated, onOpenSupport, onOpenSettings }: NavProps) {
         </button>
       </nav>
 
-      <div className="mt-auto flex w-full flex-col gap-3">
+      {!collapsed && (
+        <div className="mt-6 flex w-full flex-col gap-4 border-t-2 border-dashed border-ink/15 pt-6">
+          <CompanionPresence now={now} />
+          <TodayStats />
+        </div>
+      )}
+
+      <div className="mt-auto flex w-full flex-col gap-3 pt-6">
         <button
           onClick={() =>
             updateSettings({ sidebarCollapsed: !collapsed })

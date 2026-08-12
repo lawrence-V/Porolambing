@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { useDocumentTitle, useTimerTick } from "@/lib/timer/useTimer";
 import { cn } from "@/lib/cn";
+import { GROUND, toneFor } from "@/lib/timer/tone";
 import { BentoGrid } from "./BentoGrid";
+import { FocusMode } from "./FocusMode";
 import { FlowSettingsModal } from "./FlowSettingsModal";
 import { MiniTimer } from "./MiniTimer";
 import { SettingsDrawer } from "./SettingsDrawer";
@@ -19,6 +21,8 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const timer = useAppStore((state) => state.timer);
 
   useDocumentTitle(now);
 
@@ -29,13 +33,19 @@ export function AppShell() {
   // Both nav branches drive the same handlers, so the drawer and the modals
   // behave identically whichever one is on screen.
   const nav = {
+    now,
     hydrated,
     onOpenSupport: () => setSupportOpen(true),
     onOpenSettings: () => setSettingsOpen(true),
   };
 
   return (
-    <div className="min-h-full bg-cream">
+    <div
+      style={{ background: GROUND[toneFor(timer.kind, timer.phase)] }}
+      // The whole surface warms while you work and cools on a break. Slow on
+      // purpose: it should read as the room changing, not a state flip.
+      className="min-h-full transition-[background] duration-[600ms]"
+    >
       <SideNav {...nav} />
       <TopBar {...nav} />
 
@@ -47,11 +57,16 @@ export function AppShell() {
         )}
       >
         <div className="mx-auto max-w-7xl">
-          <BentoGrid now={now} onOpenFlowSettings={() => setFlowOpen(true)} />
+          <BentoGrid
+            now={now}
+            onOpenFlowSettings={() => setFlowOpen(true)}
+            onEnterFocusMode={() => setFocusMode(true)}
+          />
         </div>
       </main>
 
       <MiniTimer now={now} />
+      <FocusMode now={now} open={focusMode} onClose={() => setFocusMode(false)} />
 
       <SettingsDrawer
         open={settingsOpen}

@@ -5,14 +5,14 @@ a companion opens a chat and checks on you.
 
 ```bash
 npm run dev        # http://localhost:3000
-npm test           # timer machine unit tests
+npm test           # timer machine + lambing engine unit tests
 npm run typecheck
 npm run lint
 npm run build
 ```
 
 Two routes: `/` is the marketing page, `/app` is the product. No backend, no
-accounts, no API keys — your sessions, tasks and streaks live in the browser.
+accounts, no API keys — your sessions and tasks live in the browser.
 
 The deployed site does load **Vercel Analytics** (`<Analytics />` in
 `app/layout.tsx`), which counts anonymous page views. That's the only thing
@@ -21,45 +21,76 @@ otherwise. Remove that one line to make it literally nothing.
 
 ---
 
-## Writing the lambing copy
+## The lambing copy — this is the product
 
-**This is the next job, and it is entirely a data edit.** Every line the
-companion says lives in [`lib/lambing/lines.ts`](lib/lambing/lines.ts). What
-ships today is placeholder Taglish so that no trigger is ever silent; the
-engine, timing, and chip branching around it are the real work and don't need
-to change when you rewrite the words.
+Every word the companion says is data, in two files:
+
+- [`lib/lambing/lines.ts`](lib/lambing/lines.ts) — what it says *unprompted*,
+  keyed by trigger.
+- [`lib/lambing/intents.ts`](lib/lambing/intents.ts) — how it answers what you
+  **type**, matched by keyword.
+
+Both ship as a **draft to rewrite in your own voice**. The engine, matching,
+timing and branching are finished and don't change when the words do.
+
+**Two personas**, deliberately different characters rather than one voice with
+adjectives swapped:
+
+| | Voice |
+|---|---|
+| `jowa` | Soft, possessive, a little dramatic. *"Sa akin ka na muna ngayon. Wag ka na bumalik sa work."* |
+| `bestfriend` | Dry, teasing, never soppy. *"Kinain mo na ba lunch mo? Hulaan ko: hindi pa."* |
+
+A line with no `persona` is shared by both, so keep those genuinely neutral.
+Adding a third is a data exercise: append to `PERSONAS` in
+[`lib/lambing/types.ts`](lib/lambing/types.ts) and write its lines.
+
+**The relationship grows with the work you've done.** `intensity` is 1 gentle ·
+2 warm · 3 clingy, and `preferredIntensity` uses total completed focus sessions
+as the *baseline* — under 10 → 1, 10–49 → 2, 50+ → 3 — with session length
+nudging from there. The companion earns familiarity instead of being equally
+needy on session one and session fifty. This used to key off a streak, which
+meant one missed day reset the relationship to strangers.
+
+**Typed messages** are matched locally, no model and no network. Keywords of
+four characters or fewer match whole words only, because plain substring
+matching fires `hi` inside *hindi*, *this* and *sipag* — the difference between
+seeming to understand and seeming broken. Misses are common by design, so the
+`FALLBACKS` pool never says "I don't understand"; it hands the turn back. Most
+of the perceived quality lives in those few lines.
 
 A line looks like this:
 
 ```ts
 {
-  id: "bs-4",
+  id: "jo-bs-3",
+  persona: "jowa",        // omit to share across every persona
   trigger: "break:start",
-  intensity: 3,          // 1 gentle · 2 warm · 3 clingy
-  text: "Ang tagal mong nag-focus ha. || Sa akin ka muna ngayon.",
+  intensity: 3,           // 1 gentle · 2 warm · 3 clingy
+  text: "Sa akin ka na muna ngayon. || Wag ka na bumalik sa work.",
   chips: ["missed-you", "more"],
 }
 ```
 
 - `||` splits a line into consecutive bubbles, which reads far more like a
   person typing than one long paragraph.
-- Slots: `{companion}` `{user}` `{minutes}` `{streak}` `{banked}` `{days}`
-  `{awayMinutes}` `{cycles}`.
-- `intensity` is how needy the line is. The engine picks based on context — a
-  5-minute break gets a gentle nudge, forty minutes of focus or a three-day
-  absence unlocks the dramatic reunion.
-- `chips` are the tappable replies offered after the line. Chips and their
-  responses live in the `CHIPS` map in the same file; each can offer a
-  `followUp` for a second conversational beat.
+- Slots: `{companion}` `{user}` `{minutes}` `{banked}` `{days}`
+  `{awayMinutes}` `{cycles}` `{task}`. Set `requiresTask: true` on any line
+  using `{task}`, or it renders a gap when nothing is active.
+- `chips` are the tappable replies. They live in `CHIPS` in the same file and
+  can carry a `persona` too. A reply that would leave no chips gets a default
+  pair attached by the engine, so tapping can never hit a dead end.
 
 Selection is weighted by intensity and filtered through a recently-used ring
-buffer, so the same line won't repeat inside a session.
+buffer, so the same line won't repeat inside a session. Typing has its own
+rhythm — a thinking pause then jittered per-bubble delays, because one fixed
+formula made every message arrive like clockwork.
 
-**Previewing lines:** there is no preview panel — an earlier dev-only
-"Triggers" button was removed. To tune copy without sitting through real
-sessions, call `emitLambingEvent("break:start", { minutes: 5 })` from the
-browser console after importing it, or re-add a small panel that maps each
-trigger in [`lib/timer/events.ts`](lib/timer/events.ts) to a button.
+**Previewing lines:** [`components/app/DevTriggerPanel.tsx`](components/app/DevTriggerPanel.tsx)
+fires any trigger on demand and switches persona, session total and whether a task is
+set. It is **not mounted** — render `<DevTriggerPanel />` in `AppShell` for a
+copy-writing session, since tuning lines is impossible if hearing one means
+sitting through a real 25-minute session.
 
 ### The twelve triggers
 
@@ -71,18 +102,21 @@ trigger in [`lib/timer/events.ts`](lib/timer/events.ts) to a button.
 | `break:start` | a break session begins |
 | `break:idle` | 45s into a break with no interaction |
 | `break:ending` | 15s left on a break |
-| `streak:milestone` | the streak hits 3, 7, 14, 30, 50 or 100 days |
 | `user:returned` | you open the app a day or more after last time |
 | `day:first-session` | the day's first focus starts — fires *instead of* `focus:start`, never both |
 | `focus:returned` | you come back to the tab after ≥2 min away mid-focus |
 | `cycle:complete` | a long break finishes, so a full set of four is done |
 | `focus:long-haul` | Flow-mode work crosses 30, 60 or 90 minutes |
 
-**During focus the companion says nothing** — that's deliberate. Instead the
-chat card switches to a waiting state: the avatar's mood shifts to `sleepy`
+**During focus the companion says nothing** — that's deliberate, and it holds
+through a pause too, since a paused focus session is still a focus session.
+The chat card switches to a waiting state: the avatar's mood shifts to `sleepy`
 past 15 minutes, it breathes, and a band shows how long it has been waiting.
-Silence you can feel is what makes the break reunion land. The one exception is
-`focus:returned`, which only fires once you've *already* been away two minutes.
+Silence you can feel is what makes the break reunion land.
+
+Two exceptions, both user-initiated: `focus:returned` fires only once you've
+*already* been away two minutes, and **typing always gets an answer** — the
+rule is that the companion never *initiates* while you work.
 
 ### When you build your own chat engine
 
@@ -93,6 +127,7 @@ implements the `LambingProvider` interface from
 ```ts
 respond(request): Promise<LambingReply | null>
 respondToChip(chipId, request): Promise<LambingReply | null>
+respondToText(text, request): Promise<LambingReply | null>
 ```
 
 Write a second implementation, construct it instead in
@@ -112,9 +147,10 @@ components/
   ui/         Card, Button, button styles
 lib/
   timer/      machine (pure), useTimer (ticking), events (the bus)
-  lambing/    types, lines, engine, mood, useLambingChat
+  lambing/    types, lines, intents, matching, engine, mood, useLambingChat
   store/      repository interface, localStorage adapter, zustand store
   notify.ts   session-end chime + browser notification
+  site.ts     deployed origin (NEXT_PUBLIC_SITE_URL)
   support.ts  GCash QR path + Buy Me a Coffee link — edit these
   date.ts     shared local-day bucketing
 ```
@@ -125,6 +161,23 @@ the first Start press, because browsers hand back a suspended context unless
 it's created inside a user gesture. Notifications only fire when the tab is
 hidden; if you're looking at the page, the chime already said it. A manual
 `Skip` stays silent. Both are toggles under **Alerts** in Settings.
+
+**The Today card is a fixed height at any number of sessions.** It used to
+render a row per session inside a card that grows to fit — the `overflow-y-auto`
+never fired because the grid row is `auto-rows-min`, so 17 sessions made a
+624px card and a 1561px page on a 950px viewport. Now only the four most recent
+are listed, with a `Show all N ▾` expander, and the expanded list is capped at
+`max-h-64` so even that state can't run away.
+
+The `sessionsOn` / `focusSeconds` / `focusCount` helpers in
+[`lib/stats.ts`](lib/stats.ts) are shared by the Today card and the rail — they
+previously derived "today" separately, via `toDateString()` in one place and
+`dayKey` in another, which is two ways of answering the same question.
+
+**The rail carries the companion.** Its live mood and status sit under the nav,
+because the chat card can be scrolled past or hidden and the premise of the app
+is that someone is waiting for you. Today's numbers sit below it, from the same
+helpers the cards use. Both disappear when the rail collapses to icons.
 
 **The week chart** uses a single hue, `--color-green-deep`, because it's one
 series — and because that's the one green step clearing 3:1 against a white
@@ -208,6 +261,43 @@ name are migrated on read by `normalizeSettings` in
 [`lib/store/types.ts`](lib/store/types.ts) — there is no schema bump, and
 `npm test` covers the migration.
 
+### Schema migrations
+
+Everything persists as one blob under `porolambing:v1`, versioned by
+`schemaVersion`. `migrations` in
+[`lib/store/localAdapter.ts`](lib/store/localAdapter.ts) is keyed by the
+version being migrated *from*; a version with no path forward resets to
+defaults rather than running on a shape we can't read, so **a bump without a
+matching step silently wipes real history.** `localAdapter.test.ts` guards
+exactly that.
+
+**v1 → v2** drops the dead `streak` object. `read` spreads whatever it parsed,
+so without the step the removed key would ride along in every future write.
+
+### Tasks
+
+Marking a task active makes the timer name it, the companion mention it, and
+the session log record it. The **title is the button** — the row already has a
+checkbox and a remove ×. Sessions store a *copy* of the title, not a
+reference: deleting a task must not blank the history of work done on it.
+
+**The card is a fixed height at any number of tasks**, for the same reason the
+Today card is: the `overflow-y-auto` never fired inside an `auto-rows-min` grid
+row, so 15 tasks made a 640px card and a 1429px page on a 950px viewport. Three
+things hold it now, measured at 410px with 15 tasks and 410px with 60:
+
+- **Open tasks scroll past `max-h-56`.** Finished ones are pulled out of that
+  list into a `N done ▾` section with a Clear, so the pile of things you have
+  already done can't push the live list out of reach. Clear is one write via
+  `clearDoneTasks`, not N calls to `removeTask`.
+- **Titles clamp to two lines.** One truncated line of a long title is
+  unreadable, and unbounded wrapping is what made the card grow.
+- **The active task scrolls itself into view**, since a list that scrolls can
+  otherwise hide the very thing you're working on.
+
+The remove × is drawn at low opacity rather than revealed on hover: hover
+doesn't exist on a touch screen, which is where a long list is worst.
+
 ### Cards
 
 Cards can be reordered by dragging their **grip or label**, and hidden with the
@@ -245,6 +335,80 @@ drawn specifically for 16px; the two intentionally diverge. Both use the
 - **Classic/Flow** — a segmented control on the timer card, disabled while a session is running
   because switching would change what the running clock means.
 
+## Sharing, installing, failing
+
+**Search and share metadata** live in `app/layout.tsx` with
+`app/opengraph-image.tsx`, `app/robots.ts` and `app/sitemap.ts`.
+
+**The origin resolves itself.** [`lib/site.ts`](lib/site.ts) reads
+`NEXT_PUBLIC_SITE_URL` first, then falls back to Vercel's own
+`VERCEL_PROJECT_PRODUCTION_URL`, then to localhost. Nothing needs configuring in
+the dashboard, and a preview deployment's canonical and sitemap still point at
+production rather than at a URL that's gone next week. Set
+`NEXT_PUBLIC_SITE_URL` when a custom domain arrives. Both are read on the
+server only — `VERCEL_PROJECT_PRODUCTION_URL` has no `NEXT_PUBLIC_` prefix and
+is not inlined into the client bundle, so nothing client-side may import
+`siteUrl()`.
+
+Getting this wrong is not cosmetic: `metadataBase` decides whether the OG image
+is an absolute URL Messenger and Facebook can fetch, and a `sitemap.xml` full of
+`http://localhost:3000` is rejected outright, because the URLs aren't on the
+site's host.
+
+### Being indexed
+
+The head carries `alternates.canonical` — the same page is served on the
+production URL *and* on every preview deployment URL, and without a canonical
+they compete as duplicates — plus explicit `robots: index, follow` with
+`max-image-preview: large`, which is what lets the OG image appear full size in
+a result. `app/page.tsx` emits `SoftwareApplication` JSON-LD so a crawler reads
+the page as a free web app rather than an article.
+
+The `<h1>` is the wordmark `POROLAMBING`, which describes the page to nobody.
+It carries an `sr-only` line restating the tagline directly below it, so the
+heading says *what the page is* to a crawler and a screen reader both. `/app` is
+disallowed in `robots.txt`: it's a private local workspace and every visit
+renders the same empty shell.
+
+**None of this makes Google aware the site exists.** A new `.vercel.app`
+subdomain with no inbound links can go uncrawled for weeks. That part is manual:
+
+1. Add the site to Google Search Console as a **URL-prefix** property — a
+   domain property needs DNS, which a `.vercel.app` subdomain can't provide.
+2. Verify by the HTML-tag method: set `GOOGLE_SITE_VERIFICATION` in Vercel to
+   the token, redeploy, then press Verify. The `verification` field is dropped
+   entirely when the variable is unset.
+3. Submit `sitemap.xml`, then URL Inspection → **Request Indexing**.
+4. Repeat at Bing Webmaster Tools, which also feeds DuckDuckGo.
+
+Expect days to weeks, and check Search Console rather than searching Google — a
+`site:` query is unreliable while a new site is still being crawled.
+
+The OG image uses `ImageResponse`'s bundled font rather than Archivo: satori
+needs font data handed to it, and an image that always renders beats one in the
+right typeface. Satori also refuses any `<div>` with more than one child and no
+explicit `display` — text next to an interpolation counts as two, so keep those
+as single template strings.
+
+There is no share-your-stats card. `GET /share` rendered one and was removed
+along with streaks — the numbers it drew were the streak's.
+
+**Installable.** `app/manifest.ts` opens at `/app`, not the marketing page.
+`public/icon-192.png`, `public/icon-512.png` and `app/apple-icon.png` are
+rendered **from** `app/icon.svg` — regenerate them if the mango changes.
+`apple-icon` accepts only PNG, which is why the SVG can't serve it.
+
+**When it breaks.** `app/error.tsx` and `app/global-error.tsx` show the
+companion apologising. The error screen offers a **reset my data** escape as
+well as a retry, because the likely cause is unreadable `localStorage` and a
+plain reload would loop. It navigates hard rather than routing, so the corrupt
+store isn't kept alive in memory.
+
+**Accessibility note.** The settings drawer never unmounts, so it carries
+`inert` when closed. Without it, its ~24 controls stay in the tab order while
+the panel is off-screen — focus vanishes into something invisible, and
+focusable content inside `aria-hidden` is an outright ARIA violation.
+
 ## Support links
 
 **Currently hidden.** `SHOW_SUPPORT` in
@@ -277,7 +441,34 @@ during breaks is the whole point.
 | `--color-orange` | `#FF8356` | focus, CTAs |
 | `--color-blush` | `#FFBAB4` | short break |
 | `--color-mint` | `#B6DEB9` | long break |
-| `--color-yellow` | `#F7F780` | streaks, celebration |
+| `--color-yellow` | `#F7F780` | celebration, highlights |
+
+### The app changes colour with the session
+
+The page ground and the timer panel shift together as you move between states,
+over 600ms so it reads as the room changing rather than a state flip:
+
+| | Ground | Timer panel |
+|---|---|---|
+| idle | cream | **white** — colour means a session is running |
+| focus | warm `#fff0e6` | `#ffe2d2` |
+| short break | blush `#ffeceb` | `#ffdcd9` |
+| long break | mint `#eaf5ec` | `#d8ecdb` |
+
+Tinted, not saturated: this is a surface someone stares at for 25 minutes, and
+every combination keeps ink text above **13:1** — far past the 4.5:1 minimum.
+`toneFor` in [`lib/timer/tone.ts`](lib/timer/tone.ts) picks the tone, and a
+paused session keeps its colour rather than falling back to idle, because you
+are still in the middle of it.
+
+**Cards have weight.** `hero` (timer, chat) get more padding and a deeper
+shadow; `quiet` (tasks, week, log) step back. Six identical white
+rectangles gave the timer the same presence as the log.
+
+**Focus mode** — the expand button on the timer, or Escape to leave — drops
+the grid for a full field of the session colour, the display face at
+`clamp(5rem, 20vw, 16rem)`, and the mango large enough to read as a character.
+It's where the landing page's boldness actually lands inside the app.
 
 Nothing in `/app` renders below 12px, and no text sits under 70% opacity —
 ink at 50% over white computes to about 3.5:1, under the 4.5:1 WCAG AA

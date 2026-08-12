@@ -71,6 +71,7 @@ export function WeekCard({ className }: { className?: string }) {
 
   return (
     <Card
+      weight="quiet"
       label="Last 7 days"
       className={className}
       action={

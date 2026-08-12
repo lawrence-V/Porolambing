@@ -28,5 +28,5 @@ export const GCASH_QR_SRC = "/gcash-qr.png";
 export const CREDIT = {
   madeWithPrefix: "Created with ",
   madeWithSuffix: " for my love, by Lawrence Valdez",
-  copyright: "Copyright © 2026. All rights reserved.",
+  copyright: "",
 } as const;

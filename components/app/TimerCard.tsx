@@ -13,7 +13,9 @@ import {
 } from "@/lib/timer/machine";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { PANEL, toneFor } from "@/lib/timer/tone";
 import { cn } from "@/lib/cn";
+import { PauseIcon, PlayIcon, ResetIcon, SkipIcon } from "./TimerIcons";
 
 const KIND_TABS: Array<{ kind: SessionKind; label: string }> = [
   { kind: "focus", label: "Focus" },
@@ -32,12 +34,14 @@ interface TimerCardProps {
   now: number;
   className?: string;
   onOpenFlowSettings?: () => void;
+  onEnterFocusMode?: () => void;
 }
 
 export function TimerCard({
   now,
   className,
   onOpenFlowSettings,
+  onEnterFocusMode,
 }: TimerCardProps) {
   const timer = useAppStore((state) => state.timer);
   const settings = useAppStore((state) => state.settings);
@@ -47,6 +51,7 @@ export function TimerCard({
   const skip = useAppStore((state) => state.skip);
   const switchKind = useAppStore((state) => state.switchKind);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const activeTask = useAppStore((state) => state.activeTask());
 
   const countsUp = timer.countsUp;
   const seconds = countsUp
@@ -68,10 +73,13 @@ export function TimerCard({
   // hangs at 00:00. Unreachable now that Flow breaks fall back to their
   // configured length, but a corrupt stored payload could still produce one.
   const canStart = startable(timer);
+  const tone = toneFor(timer.kind, timer.phase);
 
   return (
     <Card
       label="Timer"
+      weight="hero"
+      fill={PANEL[tone]}
       className={cn("overflow-hidden", className)}
       action={
         <span className="flex items-center gap-2">
@@ -108,6 +116,26 @@ export function TimerCard({
             ))}
           </span>
 
+          {onEnterFocusMode && (
+            <button
+              onClick={onEnterFocusMode}
+              aria-label="Full screen focus mode"
+              title="Full screen"
+              className="grid h-7 w-7 place-items-center rounded-full text-ink/70 transition-colors hover:bg-ink/10 hover:text-ink"
+            >
+              <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden>
+                <path
+                  d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          )}
+
           {flow && (
             <button
               onClick={onOpenFlowSettings}
@@ -134,13 +162,6 @@ export function TimerCard({
         </span>
       }
     >
-      {/* Wash of the current state's colour behind the clock. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-28 opacity-25 blur-2xl transition-colors duration-500"
-        style={{ background: tint }}
-      />
-
       <div className="relative flex flex-col items-center">
         {/* Locked once a session is under way. `switchKind` builds a fresh
             timer state, so a stray tab click on a running session silently
@@ -174,8 +195,8 @@ export function TimerCard({
 
         <div className="relative grid place-items-center">
           <svg
-            width={180}
-            height={180}
+            width={228}
+            height={228}
             viewBox="0 0 128 128"
             className="-rotate-90"
             aria-hidden
@@ -205,10 +226,7 @@ export function TimerCard({
 
           <div className="absolute inset-0 grid place-content-center text-center">
             <span
-              className={cn(
-                "font-display tabular text-ink",
-                "text-[3.25rem]",
-              )}
+              className="font-display tabular text-ink text-[4.25rem]"
             >
               {formatClock(seconds)}
             </span>
@@ -217,6 +235,12 @@ export function TimerCard({
             </span>
           </div>
         </div>
+
+        {activeTask && timer.kind === "focus" && (
+          <p className="mt-3 max-w-xs truncate text-center text-sm opacity-70">
+            Working on <strong className="font-semibold">{activeTask.title}</strong>
+          </p>
+        )}
 
         {/* Flow starts at 00:00 and climbs, which on its own looks like
             nothing is happening. Name what the session is working toward. */}
@@ -237,29 +261,39 @@ export function TimerCard({
           </p>
         )}
 
-        {/* One obvious primary. Skip and Reset are deliberately lighter so the
-            eye lands on Start rather than scanning three equal buttons. */}
-        <div className="mt-5 flex items-center gap-2">
+        {/* One unmistakable primary, then a matched secondary pair. Reset was
+            a borderless ghost, which read as a link rather than a control and
+            gave the least affordance to the one action that discards work. */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
           <Button
             size="xl"
             onClick={startOrPause}
             disabled={!canStart}
             title={canStart ? undefined : "Earn some break time first"}
-            className="min-w-40"
+            className="min-w-44"
           >
+            {running ? <PauseIcon /> : <PlayIcon />}
             {running ? "Pause" : timer.phase === "paused" ? "Resume" : "Start"}
           </Button>
-          <Button variant="outline" size="md" onClick={skip}>
-            Skip
-          </Button>
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={reset}
-            aria-label="Reset timer"
-          >
-            Reset
-          </Button>
+
+          <span className="flex items-center gap-2">
+            <Button variant="outline" size="lg" onClick={skip}>
+              <SkipIcon />
+              Skip
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={reset}
+              // Nothing to undo on an untouched timer, and offering it anyway
+              // implies the button does something it doesn't.
+              disabled={idle && elapsedSeconds(timer, now) === 0}
+              title="Discard this session and start over"
+            >
+              <ResetIcon />
+              Reset
+            </Button>
+          </span>
         </div>
 
         <div className="mt-4 flex w-full items-center justify-between border-t-2 border-dashed border-ink/15 pt-3">

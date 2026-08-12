@@ -1,4 +1,4 @@
-import type { Repository } from "./repository";
+import type { Repository } from "./repository.ts";
 import {
   CURRENT_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
@@ -8,9 +8,8 @@ import {
   type PersistedState,
   type SessionRecord,
   type Settings,
-  type StreakState,
   type Task,
-} from "./types";
+} from "./types.ts";
 
 const STORAGE_KEY = "porolambing:v1";
 
@@ -21,11 +20,20 @@ type Migration = (state: PersistedState) => PersistedState;
 
 /**
  * Keyed by the version being migrated *from*. When the shape changes, bump
- * CURRENT_SCHEMA_VERSION and add the step that moves 1 -> 2 here.
+ * CURRENT_SCHEMA_VERSION and add the step that moves n -> n+1 here.
  */
-const migrations: Record<number, Migration> = {};
+const migrations: Record<number, Migration> = {
+  // Streaks are gone. Without this the old `streak` object rides along in
+  // every future write, since `read` spreads whatever it parsed.
+  1: (state) => {
+    const next = { ...state, schemaVersion: 2 };
+    delete (next as { streak?: unknown }).streak;
+    return next;
+  },
+};
 
-function migrate(raw: PersistedState): PersistedState {
+/** Exported for tests: a wrong step here silently wipes a real user's data. */
+export function migrate(raw: PersistedState): PersistedState {
   let state = raw;
   while (state.schemaVersion < CURRENT_SCHEMA_VERSION) {
     const step = migrations[state.schemaVersion];
@@ -108,14 +116,6 @@ export class LocalStorageAdapter implements Repository {
     this.write({ sessions });
   }
 
-  async getStreak(): Promise<StreakState> {
-    return this.read().streak;
-  }
-
-  async saveStreak(streak: StreakState): Promise<void> {
-    this.write({ streak });
-  }
-
   async getTasks(): Promise<Task[]> {
     return this.read().tasks;
   }
@@ -138,6 +138,14 @@ export class LocalStorageAdapter implements Repository {
 
   async saveHiddenCards(hiddenCards: string[]): Promise<void> {
     this.write({ hiddenCards });
+  }
+
+  async getActiveTaskId(): Promise<string | null> {
+    return this.read().activeTaskId;
+  }
+
+  async saveActiveTaskId(activeTaskId: string | null): Promise<void> {
+    this.write({ activeTaskId });
   }
 
   async getBankedBreakSeconds(): Promise<number> {
